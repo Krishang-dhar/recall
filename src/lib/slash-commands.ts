@@ -1,0 +1,150 @@
+import {
+  Calendar,
+  Bell,
+  Clock,
+  Search,
+  CheckSquare,
+  Zap,
+  Mic,
+  Mail,
+  RotateCcw,
+  Target,
+  FileText,
+} from 'lucide-react';
+
+export interface SlashCommand {
+  id: string;
+  command: string;
+  label: string;
+  description: string;
+  category: 'Schedule & Day' | 'Action & Tasks' | 'Recall Flow & Voice' | 'Integrations';
+  iconName: string;
+  example: string;
+  isDirectAction?: boolean;
+  defaultPrompt?: string;
+  placeholder?: string;
+}
+
+export const RECALL_SLASH_COMMANDS: SlashCommand[] = [
+  {
+    id: 'today',
+    command: '/today',
+    label: 'Today’s Schedule',
+    description: 'Review today’s timeline, meetings, and upcoming commitments',
+    category: 'Schedule & Day',
+    iconName: 'calendar',
+    example: '/today',
+    isDirectAction: true,
+    defaultPrompt: 'What do I have today?',
+  },
+  {
+    id: 'plan',
+    command: '/plan',
+    label: 'AI Day Planner',
+    description: 'Build an optimized, conflict-free schedule around your meetings',
+    category: 'Schedule & Day',
+    iconName: 'calendar',
+    example: '/plan 10am client sync, 2pm invoice review, 5pm gym',
+    isDirectAction: false,
+    placeholder: 'List tasks, times, or meetings to fit into your day…',
+  },
+  {
+    id: 'catchup',
+    command: '/catchup',
+    label: 'Daily Executive Briefing',
+    description: 'Get a fast morning briefing on your priorities and schedule',
+    category: 'Schedule & Day',
+    iconName: 'clock',
+    example: '/catchup',
+    isDirectAction: true,
+    defaultPrompt: 'Catch me up on today’s schedule and top priorities.',
+  },
+  {
+    id: 'rescue',
+    command: '/rescue',
+    label: 'Rescue My Day',
+    description: 'Rebalance your remaining hours and reschedule slipped tasks',
+    category: 'Schedule & Day',
+    iconName: 'rotate-ccw',
+    example: '/rescue',
+    isDirectAction: true,
+    defaultPrompt: 'Rescue my day and recalculate realistic time blocks.',
+  },
+  {
+    id: 'meeting',
+    command: '/meeting',
+    label: 'Schedule Meeting',
+    description: 'Create an event on Google Calendar with automatic reminder',
+    category: 'Action & Tasks',
+    iconName: 'calendar',
+    example: '/meeting with Rahul tomorrow from 4 to 5 PM',
+    isDirectAction: false,
+    placeholder: 'with [Name] [time / day]…',
+  },
+  {
+    id: 'remind',
+    command: '/remind',
+    label: 'Smart Reminder',
+    description: 'Set an alert delivered via Recall desktop and optional WhatsApp',
+    category: 'Action & Tasks',
+    iconName: 'bell',
+    example: '/remind send the signed contract at 6 PM',
+    isDirectAction: false,
+    placeholder: 'what to remind you and when…',
+  },
+  {
+    id: 'task',
+    command: '/task',
+    label: 'Create Task',
+    description: 'Add a prioritized item with intelligent due date placement',
+    category: 'Action & Tasks',
+    iconName: 'check-square',
+    example: '/task finalize Q4 pitch deck by Friday',
+    isDirectAction: false,
+    placeholder: 'task description and deadline…',
+  },
+  {
+    id: 'search',
+    command: '/search',
+    label: 'Universal Search',
+    description: 'Instantly find any meeting, task, note, or connected file',
+    category: 'Integrations',
+    iconName: 'search',
+    example: '/search Rahul proposal',
+    isDirectAction: false,
+    placeholder: 'search query across your entire Recall history…',
+  },
+  {
+    id: 'flow',
+    command: '/flow',
+    label: 'Recall Flow',
+    description: 'Activate system-wide voice layer (Option + Space anywhere on Mac)',
+    category: 'Recall Flow & Voice',
+    iconName: 'mic',
+    example: '/flow',
+    isDirectAction: true,
+    defaultPrompt: 'START_FLOW_CAPTURE',
+  },
+  {
+    id: 'email',
+    command: '/email',
+    label: 'Gmail Assistant',
+    description: 'Search inbox threads, view meeting context, or archive messages',
+    category: 'Integrations',
+    iconName: 'mail',
+    example: '/email from Sarah regarding meeting schedule',
+    isDirectAction: false,
+    placeholder: 'search query or email instruction…',
+  },
+  {
+    id: 'calendar',
+    command: '/calendar',
+    label: 'Google Calendar Sync',
+    description: 'Inspect live Google Calendar events and free openings',
+    category: 'Integrations',
+    iconName: 'calendar',
+    example: '/calendar tomorrow morning',
+    isDirectAction: true,
+    defaultPrompt: 'Show my Google Calendar schedule for tomorrow.',
+  },
+];

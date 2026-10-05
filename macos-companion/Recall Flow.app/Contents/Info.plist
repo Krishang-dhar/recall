@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>recall-flow-mac</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.recall.flow</string>
+    <key>CFBundleName</key>
+    <string>Recall Flow</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Recall Flow needs microphone access to listen to your voice.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Recall Flow uses speech recognition to convert your speech to text.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Recall Flow uses Apple Events to type text into your active applications.</string>
+</dict>
+</plist>

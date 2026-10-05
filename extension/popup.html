@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Recall Flow</title>
+  <style>
+    :root {
+      --bg: #141416;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f4f4f5;
+      --text-sub: #a1a1aa;
+      --accent: #0052ff;
+      --accent-glow: rgba(0, 82, 255, 0.35);
+      --success: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      width: 340px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+      user-select: none;
+    }
+
+    /* ── TOP HEADER ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 14px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .orb {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0052ff 0%, #7928ca 50%, #00d2ff 100%);
+      box-shadow: 0 0 14px var(--accent-glow);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: orbBreathe 3s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes orbBreathe {
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.04); filter: brightness(1.15); }
+    }
+
+    .orb img {
+      width: 20px;
+      height: 20px;
+      object-fit: contain;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+    }
+
+    .brand-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-sub);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+    }
+
+    /* ── MIDDLE / SHORTCUT & STATUS CARD ── */
+    .shortcut-strip {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .shortcut-label {
+      font-size: 11px;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .shortcut-state {
+      font-size: 11px;
+      font-weight: 600;
+      color: #e4e4e7;
+    }
+
+    kbd {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 6px;
+      padding: 3px 7px;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: #ffffff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    /* ── CONTROLS MATRIX ── */
+    .controls {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 4px 12px;
+      margin-bottom: 14px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+    }
+
+    .control-row:not(:last-child) {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .control-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .control-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #f4f4f5;
+    }
+
+    .control-desc {
+      font-size: 10px;
+      color: var(--text-sub);
+    }
+
+    /* Apple-style iOS switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: rgba(255, 255, 255, 0.15);
+      transition: .25s ease;
+      border-radius: 20px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: .25s ease;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    input:checked + .slider {
+      background-color: var(--accent);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(16px);
+    }
+
+    select {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 8px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select option {
+      background: #202024;
+      color: #fff;
+    }
+
+    /* ── BOTTOM BUTTONS ── */
+    .bottom-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-primary {
+      background: #ffffff;
+      color: #121214;
+    }
+
+    .btn-primary:hover {
+      background: #f4f4f5;
+      transform: translateY(-0.5px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e4e4e7;
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+      transform: translateY(-0.5px);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- TOP HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="orb">
+        <img src="icons/icon-48.png" alt="Recall Orb">
+      </div>
+      <div>
+        <div class="brand-title">Recall Flow</div>
+        <div class="brand-sub">AI Voice Input</div>
+      </div>
+    </div>
+    <div class="status-badge" id="status-badge">
+      <span class="status-dot"></span>
+      <span id="status-text">Connected</span>
+    </div>
+  </div>
+
+  <!-- MIDDLE SHORTCUT & STATUS -->
+  <div class="shortcut-strip">
+    <div class="shortcut-label">
+      <span>Shortcut</span>
+      <span class="shortcut-state" id="shortcut-state">• Ready</span>
+    </div>
+    <kbd id="shortcut-key">⌥ + Space</kbd>
+  </div>
+
+  <!-- CONTROLS MATRIX -->
+  <div class="controls">
+    <!-- Enable Flow Toggle -->
+    <div class="control-row">
+      <div class="control-info">
+        <span class="control-title">Enable Flow</span>
+        <span class="control-desc">Summon with shortcut</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-enabled" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Language Selector -->
+    <div class="control-row">
+      <div class="control-info">
+        <span class="control-title">Language</span>
+        <span class="control-desc">English / Hindi / Hinglish</span>
+      </div>
+      <select id="select-language">
+        <option value="auto">Auto-detect</option>
+        <option value="en">English</option>
+        <option value="hi">Hindi</option>
+        <option value="hinglish">Hinglish</option>
+      </select>
+    </div>
+
+    <!-- Auto Mode Toggle -->
+    <div class="control-row">
+      <div class="control-info">
+        <span class="control-title">Auto Mode</span>
+        <span class="control-desc">Infer Write, Act & Ask</span>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="toggle-auto-mode" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <!-- Visual Style / Variant -->
+    <div class="control-row">
+      <div class="control-info">
+        <span class="control-title">Visual Style</span>
+        <span class="control-desc">Overlay variant</span>
+      </div>
+      <select id="select-variant">
+        <option value="capsule">Orb Capsule (C)</option>
+        <option value="pill">Glass Pill (A)</option>
+        <option value="card">Rounded Card (B)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- BOTTOM ACTIONS -->
+  <div class="bottom-actions">
+    <button class="btn btn-secondary" id="btn-open-settings">
+      Settings
+    </button>
+    <button class="btn btn-primary" id="btn-open-recall">
+      Open Recall ↗
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
