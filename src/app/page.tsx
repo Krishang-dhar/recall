@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useTasks } from '@/lib/TasksContext';
 import { RecallAIComposer } from '@/components/RecallAIComposer';
 import { ConnectedPluginsBar } from '@/components/ConnectedPluginsBar';
@@ -13,7 +14,9 @@ import { Task } from '@/lib/types';
 import { Plus } from 'lucide-react';
 import { useUserSession } from '@/lib/user-session';
 
-export default function TodayPage() {
+function TodayPageContent() {
+  const searchParams = useSearchParams();
+  const chatId = searchParams.get('chatId');
   const { tasks, isLoading, createTask, updateTask, deleteTask, snoozeTask } =
     useTasks();
 
@@ -220,6 +223,7 @@ export default function TodayPage() {
       <section className="flex flex-col gap-2">
         <RecallAIComposer
           externalPrompt={externalPrompt}
+          conversationId={chatId}
           onConnectorPulse={handleConnectorPulse}
           onTaskCreated={() => handleConnectorPulse('whatsapp')}
           onOpenTaskComposer={() => setIsComposerOpen(true)}
@@ -290,5 +294,13 @@ export default function TodayPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function TodayPage() {
+  return (
+    <React.Suspense fallback={<div className="w-full min-h-[400px] flex items-center justify-center text-xs text-zinc-400">Loading workspace…</div>}>
+      <TodayPageContent />
+    </React.Suspense>
   );
 }

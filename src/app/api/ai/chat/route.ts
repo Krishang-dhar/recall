@@ -5,6 +5,7 @@ import {
   getAllTasks,
   getAllAttachments,
   createProject,
+  createConversation,
   addMessageToConversation,
   updateConversation,
   getConversationById,
@@ -71,36 +72,51 @@ export async function POST(req: NextRequest) {
       preflightContext,
     });
 
-    // If conversationId is present, persist the user message & AI reply
-    if (conversationId) {
-      addMessageToConversation({
-        conversationId,
-        role: 'user',
-        content: msgTrimmed,
-        attachments: attachedFileName
-          ? [{ id: `att-${Date.now()}`, name: attachedFileName, type: 'file', url: '#', createdAt: new Date().toISOString() }]
-          : undefined,
+    // Always persist conversations & messages like ChatGPT
+    let targetConvId = conversationId;
+    if (!targetConvId) {
+      const words = msgTrimmed.split(' ').slice(0, 5).join(' ');
+      const autoTitle = words.charAt(0).toUpperCase() + words.slice(1);
+      const newConv = createConversation({
+        title: autoTitle || 'New chat',
+        projectId,
+        assistantType: (assistantType as any) || 'recall',
+        initialMessage: msgTrimmed,
       });
+      targetConvId = newConv.id;
+    }
 
-      addMessageToConversation({
-        conversationId,
-        role: 'assistant',
-        content: result.reply,
-        planData: result.generativeUI?.planSlots,
-        actionExecuted: createdProject ? `Project "${createdProject.name}" created ✓` : undefined,
-      });
+    addMessageToConversation({
+      conversationId: targetConvId,
+      role: 'user',
+      content: msgTrimmed,
+      attachments: attachedFileName
+        ? [{ id: `att-${Date.now()}`, name: attachedFileName, type: 'file', url: '#', createdAt: new Date().toISOString() }]
+        : undefined,
+    });
 
-      // Generate a title if untitled
-      const conv = getConversationById(conversationId);
-      if (conv && (conv.title === 'New conversation' || !conv.title)) {
+    addMessageToConversation({
+      conversationId: targetConvId,
+      role: 'assistant',
+      content: result.reply,
+      planData: result.generativeUI?.planSlots,
+      actionExecuted: createdProject ? `Project "${createdProject.name}" created ✓` : undefined,
+    });
+
+    // Update conversation title and last message
+    const conv = getConversationById(targetConvId);
+    if (conv) {
+      const updates: any = { lastMessage: result.reply };
+      if (conv.title === 'New conversation' || conv.title === 'New chat') {
         const words = msgTrimmed.split(' ').slice(0, 5).join(' ');
-        const autoTitle = words.charAt(0).toUpperCase() + words.slice(1);
-        updateConversation(conversationId, { title: autoTitle });
+        updates.title = words.charAt(0).toUpperCase() + words.slice(1);
       }
+      updateConversation(targetConvId, updates);
     }
 
     return NextResponse.json({
       success: true,
+      conversationId: targetConvId,
       ...result,
       createdProject,
     });

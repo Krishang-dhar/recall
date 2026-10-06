@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Task, Conversation, Message, Project, Attachment, AssistantType } from './types';
 import { sendWhatsAppText } from './whatsapp';
+import { triggerVoiceReminder } from './voice-caller';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
@@ -160,6 +161,12 @@ export function deleteConversation(id: string): boolean {
   const filtered = convs.filter((c) => c.id !== id);
   if (filtered.length === convs.length) return false;
   fs.writeFileSync(CONVERSATIONS_FILE, JSON.stringify(filtered, null, 2), 'utf-8');
+  try {
+    const raw = fs.readFileSync(MESSAGES_FILE, 'utf-8');
+    const allMsgs: Message[] = JSON.parse(raw);
+    const filteredMsgs = allMsgs.filter((m) => m.conversationId !== id);
+    fs.writeFileSync(MESSAGES_FILE, JSON.stringify(filteredMsgs, null, 2), 'utf-8');
+  } catch {}
   return true;
 }
 
@@ -370,7 +377,13 @@ export async function checkAndDispatchDueReminders(): Promise<{
         allowFallbackTemplate: false,
       });
 
-      if (sendResult.success) {
+      // Always trigger voice reminder (Twilio phone call if configured, or Mac voice announcement)
+      const voiceResult = await triggerVoiceReminder({
+        title: task.title,
+        note: task.note,
+      });
+
+      if (sendResult.success || voiceResult.success) {
         // Mark whatsapp_sent true on the persistent local store
         updateLocalTask(task.id, { whatsapp_sent: true });
         dispatched++;
@@ -378,17 +391,17 @@ export async function checkAndDispatchDueReminders(): Promise<{
           id: task.id,
           title: task.title,
           sent: true,
-          messageId: sendResult.messageId,
+          messageId: sendResult.messageId || voiceResult.callSid || 'voice-announced',
         });
-        console.log(`[Local Scheduler] WhatsApp reminder sent for "${task.title}" (${sendResult.messageId})`);
+        console.log(`[Local Scheduler] Reminder delivered for "${task.title}" (voice: ${voiceResult.method})`);
       } else {
         results.push({
           id: task.id,
           title: task.title,
           sent: false,
-          error: sendResult.error,
+          error: sendResult.error || voiceResult.error,
         });
-        console.warn(`[Local Scheduler] WhatsApp failed for "${task.title}":`, sendResult.error);
+        console.warn(`[Local Scheduler] Delivery failed for "${task.title}":`, sendResult.error || voiceResult.error);
       }
     } catch (e: any) {
       results.push({

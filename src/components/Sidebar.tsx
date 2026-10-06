@@ -83,6 +83,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
     }
     loadData();
+
+    const handleUpdate = () => loadData();
+    window.addEventListener('recall-conversations-changed', handleUpdate);
+    return () => {
+      window.removeEventListener('recall-conversations-changed', handleUpdate);
+    };
   }, [session.mode, session.isGuest]);
 
   const todayEnd = new Date();
@@ -102,8 +108,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     try {
-      await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
-      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (session.isGuest) {
+        const raw = localStorage.getItem('recall_guest_conversations');
+        if (raw) {
+          const parsed = JSON.parse(raw).filter((c: any) => c.id !== id);
+          localStorage.setItem('recall_guest_conversations', JSON.stringify(parsed));
+          setConversations(parsed);
+        }
+      } else {
+        await fetch(`/api/conversations/${id}`, { method: 'DELETE' });
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+      }
+      window.dispatchEvent(new CustomEvent('recall-conversations-changed'));
     } catch (e) {}
   };
 

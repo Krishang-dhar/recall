@@ -26,6 +26,23 @@ export default function CompletedPage() {
     (t) => new Date(t.due_at || t.created_at) < yesterday
   );
 
+  // Group earlier items day-by-day
+  const earlierByDate = React.useMemo(() => {
+    const groups: { [dateStr: string]: { label: string; items: typeof completedTasks } } = {};
+    earlierCompleted.forEach((task) => {
+      const d = new Date(task.due_at || task.created_at);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!groups[key]) {
+        groups[key] = {
+          label: d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }),
+          items: [],
+        };
+      }
+      groups[key].items.push(task);
+    });
+    return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [earlierCompleted]);
+
   return (
     <div className="w-full flex flex-col gap-8 pb-24 md:pb-12 max-w-[760px] mx-auto apple-fade-in">
       {/* Header */}
@@ -95,19 +112,19 @@ export default function CompletedPage() {
             </section>
           )}
 
-          {/* Earlier Completed */}
-          {earlierCompleted.length > 0 && (
-            <section className="space-y-2">
+          {/* Earlier Completed Grouped by Day */}
+          {earlierByDate.map(([dateKey, group]) => (
+            <section key={dateKey} className="space-y-2">
               <div className="flex items-center justify-between pb-1.5 border-b border-black/[0.06]">
                 <span className="text-xs font-semibold tracking-tight text-zinc-900">
-                  Earlier
+                  {group.label}
                 </span>
                 <span className="text-[11px] font-mono text-zinc-400">
-                  {earlierCompleted.length}
+                  {group.items.length}
                 </span>
               </div>
               <div className="divide-y divide-black/[0.03]">
-                {earlierCompleted.map((task) => (
+                {group.items.map((task) => (
                   <TaskRow
                     key={task.id}
                     task={task}
@@ -118,7 +135,7 @@ export default function CompletedPage() {
                 ))}
               </div>
             </section>
-          )}
+          ))}
         </div>
       )}
     </div>

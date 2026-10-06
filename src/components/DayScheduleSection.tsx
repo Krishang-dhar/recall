@@ -89,6 +89,11 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
   };
 
   const today = useMemo(() => new Date(), []);
+  const yesterday = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d;
+  }, []);
   const tomorrow = useMemo(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -96,7 +101,9 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
   }, []);
 
   const isToday = isSameDay(selectedDate, today);
+  const isYesterday = isSameDay(selectedDate, yesterday);
   const isTomorrow = isSameDay(selectedDate, tomorrow);
+  const isPastDay = selectedDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   // Fetch Google Calendar events for the currently selected date (only for authenticated Google users)
   useEffect(() => {
@@ -244,6 +251,12 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
     onSelectDate(next);
   };
 
+  const handleYesterdayClick = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    onSelectDate(d);
+  };
+
   const handleTodayClick = () => {
     onSelectDate(new Date());
   };
@@ -273,13 +286,18 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
   // Summary counts
   const meetingsCount = dayItems.filter((i) => i.is_meeting).length;
   const tasksCount = dayItems.filter((i) => !i.is_meeting).length;
+  const completedCount = dayItems.filter((i) => i.status === 'completed').length;
+  const pendingCount = dayItems.filter((i) => i.status === 'pending').length;
 
   const summaryParts: string[] = [];
+  if (completedCount > 0 && pendingCount === 0) {
+    summaryParts.push('All completed ✓');
+  } else {
+    if (completedCount > 0) summaryParts.push(`${completedCount} done`);
+    if (pendingCount > 0) summaryParts.push(`${pendingCount} pending`);
+  }
   if (meetingsCount > 0) {
     summaryParts.push(`${meetingsCount} ${meetingsCount === 1 ? 'meeting' : 'meetings'}`);
-  }
-  if (tasksCount > 0) {
-    summaryParts.push(`${tasksCount} ${tasksCount === 1 ? 'task' : 'tasks'}`);
   }
   const summaryText =
     summaryParts.length > 0 ? summaryParts.join(' · ') : 'Nothing scheduled';
@@ -336,8 +354,20 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
           </button>
         </div>
 
-        {/* Right: Quick Jumps (Today, Tomorrow, Date Picker) */}
+        {/* Right: Quick Jumps (Yesterday, Today, Tomorrow, Date Picker) */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleYesterdayClick}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer ${
+              isYesterday
+                ? 'bg-zinc-900 text-white dark:bg-[#ececec] dark:text-[#171717] font-semibold shadow-2xs'
+                : 'bg-white hover:bg-zinc-50 dark:bg-[#262626] dark:hover:bg-[#303030] text-zinc-600 dark:text-zinc-300 border border-black/[0.06] dark:border-white/[0.08]'
+            }`}
+          >
+            Yesterday
+          </button>
+
           <button
             type="button"
             onClick={handleTodayClick}
@@ -542,6 +572,21 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
                       {isNew && (
                         <span className="px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-medium shrink-0 animate-in zoom-in-75 duration-300">
                           Just added
+                        </span>
+                      )}
+
+                      {/* Done badge */}
+                      {isCompleted && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-black/[0.06] text-[10px] font-medium shrink-0 flex items-center gap-0.5">
+                          <Check className="w-2.5 h-2.5 text-emerald-600 stroke-[3]" />
+                          <span>Done</span>
+                        </span>
+                      )}
+
+                      {/* Missed / Pending badge for past days */}
+                      {!isCompleted && isPastDay && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50 text-[10px] font-medium shrink-0">
+                          Pending
                         </span>
                       )}
                     </div>

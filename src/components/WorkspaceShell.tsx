@@ -74,6 +74,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
   const handleNewChat = () => {
     setActiveChatId(null);
     router.push('/');
+    window.dispatchEvent(new CustomEvent('recall-new-chat'));
   };
 
   const handleSelectConversation = (conversationId: string) => {
