@@ -17,9 +17,9 @@ export const PLUGINS_DATA: PluginMeta[] = [
   {
     id: 'whatsapp',
     name: 'WhatsApp',
-    description: 'Receive reminders outside Recall',
-    connected: true,
-    statusText: 'Connected',
+    description: 'Instant reminders (Currently disabled)',
+    connected: false,
+    statusText: 'Disabled',
     color: '#25D366',
   },
   {

@@ -89,15 +89,7 @@ export default function RecallFlowPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [flowPhase, stopAndProcessFlow, cancelHeroFlow]);
 
-  // Auto-reset to idle after 5 seconds on success
-  useEffect(() => {
-    if (flowPhase === 'success') {
-      const timer = setTimeout(() => {
-        cancelHeroFlow();
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [flowPhase, cancelHeroFlow]);
+  // Keep success result permanent until user clicks Done or cross (X)
 
   const handleAddWord = () => {
     const trimmed = newWord.trim();
@@ -349,11 +341,21 @@ export default function RecallFlowPage() {
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>{resultHeadline || 'Cleaned & formatted'}</span>
                 </span>
-                {copiedSuccess && (
-                  <span className="text-[11px] text-emerald-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200 font-medium">
-                    Copied to clipboard ✓
-                  </span>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {copiedSuccess && (
+                    <span className="text-[11px] text-emerald-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200 font-medium">
+                      Copied to clipboard ✓
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={cancelHeroFlow}
+                    className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-black/5 transition-colors cursor-pointer"
+                    title="Dismiss (Esc)"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
               <p className="text-xs font-semibold text-zinc-900 leading-relaxed">
                 “{cleanedResult || resultDetails || liveTranscript}”

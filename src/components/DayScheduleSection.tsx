@@ -11,6 +11,8 @@ import {
   Check,
   MapPin,
   Bell,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 import { PluginIcon } from './PluginIcon';
 import { decideReminderTiming } from '@/lib/action-routing';
@@ -476,15 +478,35 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
               return (
                 <div
                   key={item.id}
-                  className={`group relative flex items-start gap-3 sm:gap-4 p-3 rounded-2xl transition-all duration-300 ${
+                  onClick={() => {
+                    const original = tasks.find((t) => t.id === item.id);
+                    if (original) {
+                      onEditTask(original);
+                    } else {
+                      onEditTask({
+                        id: item.id,
+                        title: item.title,
+                        note: item.note || null,
+                        due_at: item.due_at,
+                        end_time: item.end_time || null,
+                        priority: 'medium',
+                        status: item.status,
+                        whatsapp_sent: false,
+                        location: item.location || null,
+                        is_meeting: item.is_meeting,
+                        created_at: new Date().toISOString(),
+                      });
+                    }
+                  }}
+                  className={`group relative flex items-start gap-3 sm:gap-4 p-3 rounded-2xl transition-all duration-300 cursor-pointer ${
                     isNew
                       ? 'animate-in fade-in-0 slide-in-from-top-3 duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] bg-zinc-50/90 ring-1 ring-zinc-900/10 shadow-xs'
-                      : 'hover:bg-zinc-50/80'
+                      : 'hover:bg-zinc-50/90 dark:hover:bg-zinc-800/60'
                   } ${isCompleted ? 'opacity-50' : ''}`}
                 >
                   {/* Left Column: Time */}
                   <div className="w-16 sm:w-20 pt-1 shrink-0 text-right">
-                    <span className="text-xs sm:text-[13px] font-semibold text-zinc-800 tracking-tight block">
+                    <span className="text-xs sm:text-[13px] font-semibold text-zinc-800 dark:text-zinc-200 tracking-tight block">
                       {timeString}
                     </span>
                     {endTimeString && (
@@ -499,7 +521,7 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
                     <span
                       className={`block w-2.5 h-2.5 rounded-full border-2 bg-white transition-all ${
                         item.is_meeting
-                          ? 'border-zinc-900 group-hover:scale-125'
+                          ? 'border-blue-600 group-hover:scale-125'
                           : 'border-zinc-400 group-hover:border-zinc-800'
                       } ${isCompleted ? 'bg-zinc-300 border-zinc-300' : ''}`}
                     />
@@ -509,7 +531,7 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`text-sm sm:text-[15px] font-semibold tracking-tight text-zinc-900 truncate ${
+                        className={`text-sm sm:text-[15px] font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 truncate ${
                           isCompleted ? 'line-through text-zinc-400 font-normal' : ''
                         }`}
                       >
@@ -528,9 +550,9 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-xs text-zinc-500">
                       {/* Source tag */}
                       {item.is_meeting ? (
-                        <span className="inline-flex items-center gap-1 font-medium text-zinc-600">
+                        <span className="inline-flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
                           <PluginIcon id="calendar" size={12} />
-                          <span>Calendar</span>
+                          <span>Meeting</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 text-zinc-500 font-medium">
@@ -572,8 +594,11 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
                     </div>
                   </div>
 
-                  {/* Right Actions: Complete Checkbox + More Menu */}
-                  <div className="flex items-center gap-1.5 pt-1 shrink-0">
+                  {/* Right Actions: Complete Checkbox + Quick Edit + Quick Delete */}
+                  <div
+                    className="flex items-center gap-1.5 pt-1 shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {/* Completion button */}
                     <button
                       type="button"
@@ -594,60 +619,57 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" />
                     </button>
 
-                    {/* More Menu (for Recall tasks) */}
-                    {item.source === 'recall' && (
-                      <div className="relative">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMenuId(activeMenuId === item.id ? null : item.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-zinc-700 transition-opacity rounded cursor-pointer"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5" />
-                        </button>
+                    {/* Quick Edit button */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const original = tasks.find((t) => t.id === item.id);
+                        if (original) {
+                          onEditTask(original);
+                        } else {
+                          onEditTask({
+                            id: item.id,
+                            title: item.title,
+                            note: item.note || null,
+                            due_at: item.due_at,
+                            end_time: item.end_time || null,
+                            priority: 'medium',
+                            status: item.status,
+                            whatsapp_sent: false,
+                            location: item.location || null,
+                            is_meeting: item.is_meeting,
+                            created_at: new Date().toISOString(),
+                          });
+                        }
+                      }}
+                      title="Edit meeting or task"
+                      className="p-1 rounded-lg text-zinc-400 hover:text-zinc-800 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
 
-                        {activeMenuId === item.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            className="absolute right-0 top-full mt-1 z-30 w-32 p-1 rounded-xl bg-white border border-black/[0.08] shadow-md space-y-0.5 text-xs apple-fade-in"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const original = tasks.find((t) => t.id === item.id);
-                                if (original) onEditTask(original);
-                                setActiveMenuId(null);
-                              }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-50 text-zinc-700 cursor-pointer"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onSnoozeTask(item.id, 60);
-                                setActiveMenuId(null);
-                              }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-zinc-50 text-zinc-700 cursor-pointer"
-                            >
-                              Snooze 1h
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onDeleteTask(item.id);
-                                setActiveMenuId(null);
-                              }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-50 text-red-600 cursor-pointer"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {/* Quick Delete button */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (item.source === 'recall') {
+                          await onDeleteTask(item.id);
+                        } else if (item.source === 'google' && item.calendar_event_id) {
+                          try {
+                            await fetch('/api/google/calendar/delete', {
+                              method: 'DELETE',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ eventId: item.calendar_event_id }),
+                            });
+                            setGoogleEvents((prev) => prev.filter((ev) => ev.id !== item.calendar_event_id));
+                          } catch {}
+                        }
+                      }}
+                      title="Delete"
+                      className="p-1 rounded-lg text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );

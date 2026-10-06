@@ -89,19 +89,7 @@ export const UnifiedActionCard: React.FC<UnifiedActionCardProps> = ({
     }
   }, [data.phase, data.steps.length]);
 
-  // Gentle auto-collapse after 9s of inactivity (paused while user hovers over card)
-  useEffect(() => {
-    if (data.phase === 'completed' && !isUndone && !isHovered) {
-      const timer = setTimeout(() => {
-        setIsCollapsing(true);
-        setTimeout(() => {
-          onDismiss?.();
-        }, 400);
-      }, 9000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [data.phase, isUndone, isHovered, onDismiss]);
+  // Keep result card permanent until manually dismissed via cross (X) or action
 
   const handleUndoClick = () => {
     setIsUndone(true);

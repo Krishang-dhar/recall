@@ -108,8 +108,7 @@ export default function TodayPage() {
               return { ...p, connected: isConn, statusText: isConn ? 'Connected' : 'Configure' };
             }
             if (p.id === 'whatsapp') {
-              const isConn = Boolean(data?.whatsapp?.connected);
-              return { ...p, connected: isConn, statusText: isConn ? 'Connected' : 'Configure' };
+              return { ...p, connected: false, statusText: 'Disabled' };
             }
             if (p.id === 'maps') {
               return { ...p, connected: true, statusText: 'Automatic' };
@@ -156,20 +155,37 @@ export default function TodayPage() {
     title: string;
     note?: string | null;
     due_at: string;
+    end_time?: string | null;
     priority?: any;
     location?: string | null;
+    is_meeting?: boolean;
   }) => {
     if (data.id) {
       await updateTask(data.id, {
         title: data.title,
         note: data.note,
         due_at: data.due_at,
+        end_time: data.end_time,
         priority: data.priority,
+        location: data.location,
+        is_meeting: data.is_meeting,
       });
     } else {
-      await createTask(data);
-      handleConnectorPulse('whatsapp');
+      await createTask({
+        title: data.title,
+        note: data.note,
+        due_at: data.due_at,
+        end_time: data.end_time,
+        priority: data.priority,
+        location: data.location,
+        is_meeting: data.is_meeting,
+      });
     }
+    setEditingTask(null);
+  };
+
+  const handleComposerDelete = async (id: string) => {
+    await deleteTask(id);
     setEditingTask(null);
   };
 
@@ -248,6 +264,7 @@ export default function TodayPage() {
           setEditingTask(null);
         }}
         onSave={handleComposerSave}
+        onDelete={handleComposerDelete}
       />
 
       {/* Unified Connector Side Panel */}

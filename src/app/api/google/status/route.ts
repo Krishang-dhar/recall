@@ -63,9 +63,10 @@ export async function GET(req: NextRequest) {
       email: userEmail || undefined,
     },
     whatsapp: {
-      connected: isWhatsAppConfigured,
-      phoneNumberId: process.env.META_WHATSAPP_PHONE_NUMBER_ID || undefined,
-      recipient: process.env.META_WHATSAPP_RECIPIENT || undefined,
+      connected: false,
+      disabled: true,
+      phoneNumberId: undefined,
+      recipient: undefined,
     },
     maps: {
       connected: true,

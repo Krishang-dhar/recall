@@ -489,13 +489,7 @@ export const RecallFlowOverlay: React.FC = () => {
           setPhase('success');
           setResultHeadline(inserted ? 'Inserted' : 'Copied');
           setResultDetails(data.rewrittenText);
-
-          if (inserted) {
-            scheduleCollapse(2500);
-          } else {
-            // Give user time to see [Copy] [Insert] [Rewrite] options
-            scheduleCollapse(6000);
-          }
+          // Keep response permanent until user clicks close (X) or Escape
         }, 400);
         return;
       }
@@ -512,7 +506,7 @@ export const RecallFlowOverlay: React.FC = () => {
           const cleanActionHeadline = (data.actionResult?.headline || 'Done').replace(/\s*✓\s*$/, '');
           setResultHeadline(cleanActionHeadline);
           setResultDetails(data.actionResult?.details || 'Meeting added · Reminder set');
-          scheduleCollapse(3000);
+          // Keep response permanent until user clicks close (X) or Escape
         }, 500);
         return;
       }
@@ -521,7 +515,7 @@ export const RecallFlowOverlay: React.FC = () => {
       if (data.intent === 'ask') {
         setPhase('ask');
         setAskAnswer(data.assistantResponse || 'Here is what you requested.');
-        scheduleCollapse(8000);
+        // Keep response permanent until user clicks close (X) or Escape
         return;
       }
 
@@ -885,7 +879,6 @@ export const RecallFlowOverlay: React.FC = () => {
                         if (didInsert) {
                           setIsDirectlyInserted(true);
                           setResultHeadline('Inserted');
-                          scheduleCollapse(2000);
                         }
                       }}
                       className="px-2 py-0.5 rounded-md bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] text-[10.5px] font-medium text-zinc-700 dark:text-zinc-300 transition-colors cursor-pointer"

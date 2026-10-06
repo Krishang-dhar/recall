@@ -13,28 +13,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await sendWhatsAppText({
-      title,
-      dueText,
-      note,
-      allowFallbackTemplate: false, // Strict: do not disguise as hello_world
-    });
-
-    if (!result.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error,
-          metaRawError: result.metaRawError,
-        },
-        { status: 400 }
-      );
-    }
-
+    // WhatsApp integration is currently disabled
     return NextResponse.json({
-      success: true,
-      messageId: result.messageId,
-      mode: result.mode,
+      success: false,
+      disabled: true,
+      error: 'WhatsApp reminders are currently disabled.',
     });
   } catch (err: any) {
     return NextResponse.json(
