@@ -56,7 +56,7 @@ export default function RootLayout({
         <TasksProvider>
           <WorkspaceShell>
             <Header />
-            <main className="flex-1 max-w-[1020px] w-full mx-auto px-4 sm:px-8 pt-2 sm:pt-4">
+            <main className="flex-1 min-h-0 flex flex-col max-w-[1020px] w-full mx-auto px-2 sm:px-6 pt-1 sm:pt-2">
               {children}
             </main>
             <BottomNavigation />

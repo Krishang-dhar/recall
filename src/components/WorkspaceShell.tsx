@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { GlobalSearchModal } from './GlobalSearchModal';
-import { RecallFlowOverlay } from './RecallFlowOverlay';
 
 interface WorkspaceShellProps {
   children: React.ReactNode;
@@ -101,8 +100,6 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
       <div className="flex-1 min-w-0 flex flex-col min-h-screen">
         {children}
       </div>
-
-      <RecallFlowOverlay />
     </div>
   );
 };

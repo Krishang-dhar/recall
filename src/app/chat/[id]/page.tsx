@@ -18,12 +18,30 @@ import {
   Sparkles,
   Pencil,
   CheckCircle2,
-  Share2,
 } from 'lucide-react';
 import { Conversation, Message } from '@/lib/types';
 import { FormattedAIResponse } from '@/components/FormattedAIResponse';
-import { VoiceOrb, VoiceOrbState } from '@/components/VoiceOrb';
 import { useUserSession } from '@/lib/user-session';
+
+function formatChatDate(dateString?: string) {
+  if (!dateString) return '';
+  try {
+    const d = new Date(dateString);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
+    const isYesterday = d.toDateString() === yesterday.toDateString();
+
+    const timeStr = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+    if (isToday) return `Today · ${timeStr}`;
+    if (isYesterday) return `Yesterday · ${timeStr}`;
+    return `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} · ${timeStr}`;
+  } catch {
+    return '';
+  }
+}
 
 export default function ChatDetailPage() {
   const params = useParams();
@@ -44,12 +62,10 @@ export default function ChatDetailPage() {
   const [isSavingTitle, setIsSavingTitle] = useState(false);
   const [isCopiedTranscript, setIsCopiedTranscript] = useState(false);
 
-  // Voice Orb State
-  const [voiceState, setVoiceState] = useState<VoiceOrbState>('idle');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -262,28 +278,20 @@ export default function ChatDetailPage() {
     }
   };
 
-  const formattedDate = conversation?.createdAt
-    ? new Date(conversation.createdAt).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-      })
-    : '';
+  const formattedDate = formatChatDate(conversation?.createdAt);
 
   return (
-    <div className="w-full flex flex-col min-h-screen pb-28 max-w-[860px] mx-auto apple-fade-in">
-      {/* ── 1. NOTION-STYLE MAIN HEADER & TITLE SECTION ────────────────────── */}
-      <section className="pt-2 sm:pt-4 border-b border-black/[0.06] dark:border-white/[0.08] pb-5">
-        {/* Top Breadcrumb Bar */}
-        <div className="flex items-center justify-between gap-2 mb-4">
+    <div className="w-full flex flex-col h-[calc(100vh-72px)] max-w-[920px] mx-auto overflow-hidden apple-fade-in px-2 sm:px-4">
+      {/* ── 1. COMPACT NOTION-STYLE HEADER (PINNED TOP) ────────────────────── */}
+      <section className="shrink-0 pt-1 pb-3 border-b border-black/[0.06] dark:border-white/[0.08] space-y-2">
+        {/* Top Breadcrumb & Action Toolbar */}
+        <div className="flex items-center justify-between gap-2">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 hover:text-zinc-950 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to Dashboard</span>
+            <span>Dashboard</span>
           </Link>
 
           <div className="flex items-center gap-2">
@@ -293,7 +301,7 @@ export default function ChatDetailPage() {
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 transition-all cursor-pointer"
               title="Start a new chat"
             >
-              <Plus className="w-3 h-3" />
+              <Plus className="w-3.5 h-3.5" />
               <span>New chat</span>
             </button>
 
@@ -327,12 +335,12 @@ export default function ChatDetailPage() {
           </div>
         </div>
 
-        {/* Notion-Style Document Icon + Editable Title */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#0052FF] via-[#00D2FF] to-[#7928CA] flex items-center justify-center text-white shadow-xs shrink-0">
+        {/* Editable Title + Date & Vault Badges */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-[#0052FF] via-[#00D2FF] to-[#7928CA] flex items-center justify-center text-white shadow-2xs shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/recall-logo.png" alt="Recall" className="w-5 h-5 object-contain" />
+              <img src="/recall-logo.png" alt="Recall" className="w-4 h-4 object-contain" />
             </div>
 
             <div className="flex-1 min-w-0">
@@ -351,23 +359,23 @@ export default function ChatDetailPage() {
                     }}
                     autoFocus
                     placeholder="Enter chat title…"
-                    className="w-full text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-white bg-zinc-100 dark:bg-zinc-800 px-2.5 py-1 rounded-xl outline-hidden ring-2 ring-blue-500"
+                    className="w-full text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-white bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded-xl outline-hidden ring-2 ring-blue-500"
                   />
                   <button
                     type="button"
                     onClick={handleSaveTitle}
                     disabled={isSavingTitle}
-                    className="px-3 py-1 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-xl text-xs font-semibold shrink-0 cursor-pointer"
+                    className="px-2.5 py-1 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-xl text-xs font-semibold shrink-0 cursor-pointer"
                   >
                     Save
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 group">
+                <div className="flex items-center gap-1.5 group">
                   <h1
                     onClick={() => setIsEditingTitle(true)}
-                    className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-white truncate cursor-pointer hover:opacity-80 transition-opacity"
-                    title="Click to rename like Notion"
+                    className="text-lg sm:text-xl font-bold tracking-tight text-zinc-900 dark:text-white truncate cursor-pointer hover:opacity-80 transition-opacity"
+                    title="Click to rename"
                   >
                     {conversation?.title || 'Recall Chat'}
                   </h1>
@@ -377,54 +385,50 @@ export default function ChatDetailPage() {
                     className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-opacity cursor-pointer"
                     title="Rename chat"
                   >
-                    <Pencil className="w-3.5 h-3.5" />
+                    <Pencil className="w-3 h-3" />
                   </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Metadata Row (Storage transparency & date) */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-400 pl-12">
-            {/* Storage path badge */}
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-mono text-[11px] border border-black/[0.04] dark:border-white/[0.06]">
-              <Folder className="w-3 h-3 text-blue-500" />
-              <span>Desktop/Recall_Vault/chats</span>
-            </span>
-
-            {/* Project association if linked */}
-            {conversation?.projectName && (
-              <Link
-                href={`/project/${conversation.projectId}`}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium text-[11px] hover:underline"
-              >
-                <span>Project: {conversation.projectName}</span>
-              </Link>
-            )}
-
+          {/* Date Alignment & Storage Badges */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
             {formattedDate && (
-              <span className="flex items-center gap-1 text-[11px]">
-                <Clock className="w-3 h-3 text-zinc-400" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-medium text-[11px] border border-blue-200/50 dark:border-blue-800/40">
+                <Calendar className="w-3 h-3" />
                 <span>{formattedDate}</span>
               </span>
             )}
 
-            <span className="text-[11px]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-mono text-[11px] border border-black/[0.04] dark:border-white/[0.06]">
+              <Folder className="w-3 h-3 text-blue-500" />
+              <span>Desktop/Recall_Vault/chats</span>
+            </span>
+
+            <span className="text-[11px] text-zinc-400">
               {messages.length} {messages.length === 1 ? 'message' : 'messages'}
             </span>
           </div>
         </div>
       </section>
 
-      {/* ── 2. CONVERSATION MESSAGE THREAD (CHATGPT STYLE) ────────────────── */}
-      <section className="flex-1 flex flex-col gap-5 py-6">
+      {/* ── 2. SCROLLABLE MESSAGES CONTAINER (MIDDLE) ──────────────────────── */}
+      <section className="flex-1 overflow-y-auto px-1 sm:px-3 py-4 space-y-4 scrollbar-thin">
+        {/* Date Divider Header */}
+        <div className="flex items-center justify-center py-1">
+          <span className="px-3 py-1 rounded-full bg-zinc-100/90 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 text-[11px] font-semibold border border-black/[0.04] dark:border-white/[0.06] shadow-2xs">
+            {formattedDate || 'Active Session'}
+          </span>
+        </div>
+
         {isLoading ? (
           <div className="py-24 flex flex-col items-center justify-center gap-3 text-zinc-400">
             <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-            <p className="text-xs font-medium">Loading conversation from desktop store…</p>
+            <p className="text-xs font-medium">Loading conversation from desktop vault…</p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="py-20 text-center flex flex-col items-center justify-center space-y-4">
+          <div className="py-20 text-center flex flex-col items-center justify-center space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
               <MessageSquare className="w-6 h-6 stroke-[1.5]" />
             </div>
@@ -449,7 +453,7 @@ export default function ChatDetailPage() {
                 </div>
               ) : (
                 /* Assistant Block (Left-aligned, Recall icon, formatted markdown) */
-                <div className="flex flex-col gap-1.5 w-full bg-white/80 dark:bg-zinc-900/80 border border-black/[0.05] dark:border-white/[0.06] rounded-2xl p-4 shadow-2xs">
+                <div className="flex flex-col gap-1.5 w-full bg-white/90 dark:bg-zinc-900/90 border border-black/[0.05] dark:border-white/[0.06] rounded-2xl p-4 shadow-2xs">
                   <div className="flex items-center justify-between pb-1.5 border-b border-black/[0.03] dark:border-white/[0.04]">
                     <div className="flex items-center gap-2">
                       <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#0052FF] via-[#00D2FF] to-[#7928CA] flex items-center justify-center shadow-xs">
@@ -498,7 +502,7 @@ export default function ChatDetailPage() {
 
         {/* Live Streaming Assistant Message */}
         {streamingText && (
-          <div className="flex flex-col gap-1.5 w-full bg-white/80 dark:bg-zinc-900/80 border border-black/[0.05] dark:border-white/[0.06] rounded-2xl p-4 shadow-2xs animate-in fade-in">
+          <div className="flex flex-col gap-1.5 w-full bg-white/90 dark:bg-zinc-900/90 border border-black/[0.05] dark:border-white/[0.06] rounded-2xl p-4 shadow-2xs animate-in fade-in">
             <div className="flex items-center gap-2 pb-1.5 border-b border-black/[0.03] dark:border-white/[0.04]">
               <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#0052FF] via-[#00D2FF] to-[#7928CA] flex items-center justify-center shadow-xs">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -516,51 +520,68 @@ export default function ChatDetailPage() {
 
         {/* Thinking Indicator */}
         {isSending && !streamingText && (
-          <div className="flex items-center gap-2 text-xs text-zinc-400 py-2.5 px-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl w-fit">
+          <div className="flex items-center gap-2 text-xs text-zinc-400 py-2 px-3.5 bg-zinc-50 dark:bg-zinc-800/60 rounded-xl w-fit">
             <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-500" />
-            <span>Recall is processing…</span>
+            <span>Recall is planning & executing…</span>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </section>
 
-      {/* ── 3. PINNED BOTTOM COMPOSER (CHATGPT STYLE) ──────────────────────── */}
-      <footer className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-gradient-to-t from-zinc-50 via-zinc-50/90 to-transparent dark:from-zinc-950 dark:via-zinc-950/90 pointer-events-none z-30">
-        <div className="max-w-[860px] mx-auto pointer-events-auto">
-          <form
-            onSubmit={handleSendMessage}
-            className="flex items-center gap-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.08] rounded-2xl p-2 sm:p-2.5 shadow-[0_8px_30px_rgba(0,0,0,0.08)]"
-          >
-            <div className="pl-1 shrink-0">
-              <VoiceOrb
-                state={isSending ? 'processing' : voiceState}
-                size="sm"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('open-recall-flow'));
-                }}
-              />
+      {/* ── 3. BIGGER & PROMINENT CHATGPT-STYLE COMPOSER (PINNED BOTTOM) ───── */}
+      <footer className="shrink-0 pt-1 pb-3 sm:pb-4 bg-gradient-to-t from-[#F8F9FD] dark:from-[#212121] via-[#F8F9FD]/95 dark:via-[#212121]/95 to-transparent z-20">
+        <form
+          onSubmit={handleSendMessage}
+          className="bg-white dark:bg-[#2c2c2e] border border-black/[0.08] dark:border-white/[0.1] rounded-2xl sm:rounded-3xl p-3 sm:p-3.5 shadow-[0_8px_32px_rgba(0,0,0,0.06)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)] flex flex-col gap-2 transition-all focus-within:ring-2 focus-within:ring-[#0052FF]/20 focus-within:border-[#0052FF]/50"
+        >
+          {/* Spacious Comfortable Multi-Line Textarea */}
+          <textarea
+            ref={textareaRef}
+            value={promptText}
+            onChange={(e) => setPromptText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            placeholder="Ask Recall anything, plan your schedule, or refine your thoughts… (Enter to send, Shift+Enter for new line)"
+            disabled={isSending}
+            rows={2}
+            className="w-full bg-transparent border-0 outline-hidden resize-none text-sm sm:text-base text-zinc-900 dark:text-[#ececec] placeholder:text-zinc-400 p-1 min-h-[44px] max-h-[140px] leading-relaxed"
+          />
+
+          {/* Bottom Action Bar */}
+          <div className="flex items-center justify-between pt-1 border-t border-black/[0.04] dark:border-white/[0.06]">
+            {/* Left: Quick Actions */}
+            <div className="flex items-center gap-1.5">
+              {['Plan my day', 'Review priorities', 'Draft summary'].map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => {
+                    setPromptText(chip);
+                    if (textareaRef.current) textareaRef.current.focus();
+                  }}
+                  className="px-2.5 py-1 rounded-full bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] text-[11px] font-medium text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer"
+                >
+                  {chip}
+                </button>
+              ))}
             </div>
 
-            <input
-              ref={inputRef}
-              type="text"
-              value={promptText}
-              onChange={(e) => setPromptText(e.target.value)}
-              placeholder="Ask Recall or continue conversation…"
-              disabled={isSending}
-              className="flex-1 bg-transparent border-0 outline-hidden text-xs sm:text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 px-2"
-            />
-
+            {/* Right: Big Crisp Send Button */}
             <button
               type="submit"
               disabled={!promptText.trim() || isSending}
-              className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-black dark:bg-[#ececec] dark:hover:bg-white text-white dark:text-[#171717] flex items-center justify-center transition-all disabled:opacity-30 disabled:pointer-events-none cursor-pointer shrink-0 active:scale-95 shadow-2xs"
+              className="h-9 px-4 rounded-xl bg-zinc-900 hover:bg-black dark:bg-[#ececec] dark:hover:bg-white text-white dark:text-[#171717] flex items-center justify-center gap-1.5 font-semibold text-xs transition-all disabled:opacity-25 disabled:pointer-events-none cursor-pointer shrink-0 active:scale-95 shadow-2xs"
             >
+              <span>Send</span>
               <Send className="w-3.5 h-3.5" />
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
       </footer>
     </div>
   );

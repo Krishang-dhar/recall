@@ -14,6 +14,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({
 }) => {
   const pathname = usePathname();
 
+  if (pathname.startsWith('/chat/')) {
+    return null;
+  }
+
   const navItems = [
     {
       label: 'Today',
