@@ -52,22 +52,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Load conversations and Google status based on session mode
   useEffect(() => {
     async function loadData() {
-      if (session.isGuest) {
-        try {
-          const raw = localStorage.getItem('recall_guest_conversations');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) setConversations(parsed);
-          } else {
-            setConversations([]);
-          }
-        } catch {
-          setConversations([]);
-        }
-        setGoogleConnected(false);
-        return;
-      }
-
       try {
         const [convRes, statusRes] = await Promise.all([
           fetch('/api/conversations'),
@@ -77,8 +61,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ]);
         const convData = await convRes.json();
         const statusData = await statusRes.json();
-        if (convData.success) setConversations(convData.conversations || []);
-        if (statusData?.google?.connected) setGoogleConnected(true);
+
+        if (session.isGuest && !statusData?.google?.connected) {
+          try {
+            const raw = localStorage.getItem('recall_guest_conversations');
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) setConversations(parsed);
+            } else {
+              setConversations([]);
+            }
+          } catch {
+            setConversations([]);
+          }
+        } else if (convData.success) {
+          setConversations(convData.conversations || []);
+        }
+
+        if (statusData?.google?.connected) {
+          setGoogleConnected(true);
+        } else {
+          setGoogleConnected(false);
+        }
       } catch (e) {
         console.warn('Could not load sidebar data', e);
       }

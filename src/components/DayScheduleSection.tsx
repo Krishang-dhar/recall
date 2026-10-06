@@ -105,17 +105,11 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
   const isTomorrow = isSameDay(selectedDate, tomorrow);
   const isPastDay = selectedDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Fetch Google Calendar events for the currently selected date (only for authenticated Google users)
+  // Fetch Google Calendar events for the currently selected date
   useEffect(() => {
     let cancelled = false;
 
     async function fetchDayCalendar() {
-      if (session.isGuest) {
-        setGoogleEvents([]);
-        setIsCalendarLoading(false);
-        return;
-      }
-
       setIsCalendarLoading(true);
       try {
         const startOfDay = new Date(
@@ -148,6 +142,8 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
         const data = await res.json();
         if (!cancelled && data.success && Array.isArray(data.events)) {
           setGoogleEvents(data.events);
+        } else if (!cancelled) {
+          setGoogleEvents([]);
         }
       } catch (e) {
         console.warn('Failed to fetch calendar events for day', e);
@@ -161,7 +157,7 @@ export const DayScheduleSection: React.FC<DayScheduleSectionProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [selectedDate, session.mode, session.isGuest]);
+  }, [selectedDate, session.mode]);
 
   // Merge Recall tasks and Google Calendar events into one unified day timeline
   const dayItems: DayScheduleItem[] = useMemo(() => {

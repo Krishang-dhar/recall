@@ -2,7 +2,6 @@ import fs from 'fs';
 import path from 'path';
 import { Task, Conversation, Message, Project, Attachment, AssistantType } from './types';
 import { sendWhatsAppText } from './whatsapp';
-import { triggerVoiceReminder } from './voice-caller';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
@@ -133,7 +132,29 @@ export function createConversation(data: {
 
   convs.unshift(newConv);
   fs.writeFileSync(CONVERSATIONS_FILE, JSON.stringify(convs, null, 2), 'utf-8');
+  syncConversationToDesktopVault(newConv.id);
   return newConv;
+}
+
+export function syncConversationToDesktopVault(conversationId: string): void {
+  try {
+    const os = require('os');
+    const vaultPath = path.join(os.homedir(), 'Desktop', 'Recall_Vault', 'chats');
+    if (!fs.existsSync(vaultPath)) {
+      fs.mkdirSync(vaultPath, { recursive: true });
+    }
+    const conv = getConversationById(conversationId);
+    if (!conv) return;
+    const messages = getMessagesByConversationId(conversationId);
+    let md = `# ${conv.title}\n\n*Created: ${new Date(conv.createdAt).toLocaleString()}*\n\n---\n\n`;
+    for (const msg of messages) {
+      const sender = msg.role === 'user' ? 'You' : 'Recall';
+      md += `### ${sender} (${new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})\n\n${msg.content}\n\n---\n\n`;
+    }
+    const safeTitle = (conv.title || 'untitled').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40);
+    const filename = `${safeTitle}-${conv.id.slice(-6)}.md`;
+    fs.writeFileSync(path.join(vaultPath, filename), md, 'utf-8');
+  } catch (err) {}
 }
 
 export function updateConversation(
@@ -152,6 +173,7 @@ export function updateConversation(
   };
 
   fs.writeFileSync(CONVERSATIONS_FILE, JSON.stringify(convs, null, 2), 'utf-8');
+  syncConversationToDesktopVault(id);
   return convs[idx];
 }
 
@@ -377,13 +399,7 @@ export async function checkAndDispatchDueReminders(): Promise<{
         allowFallbackTemplate: false,
       });
 
-      // Always trigger voice reminder (Twilio phone call if configured, or Mac voice announcement)
-      const voiceResult = await triggerVoiceReminder({
-        title: task.title,
-        note: task.note,
-      });
-
-      if (sendResult.success || voiceResult.success) {
+      if (sendResult.success) {
         // Mark whatsapp_sent true on the persistent local store
         updateLocalTask(task.id, { whatsapp_sent: true });
         dispatched++;
@@ -391,17 +407,17 @@ export async function checkAndDispatchDueReminders(): Promise<{
           id: task.id,
           title: task.title,
           sent: true,
-          messageId: sendResult.messageId || voiceResult.callSid || 'voice-announced',
+          messageId: sendResult.messageId,
         });
-        console.log(`[Local Scheduler] Reminder delivered for "${task.title}" (voice: ${voiceResult.method})`);
+        console.log(`[Local Scheduler] Reminder delivered for "${task.title}"`);
       } else {
         results.push({
           id: task.id,
           title: task.title,
           sent: false,
-          error: sendResult.error || voiceResult.error,
+          error: sendResult.error,
         });
-        console.warn(`[Local Scheduler] Delivery failed for "${task.title}":`, sendResult.error || voiceResult.error);
+        console.warn(`[Local Scheduler] WhatsApp delivery skipped/failed for "${task.title}":`, sendResult.error);
       }
     } catch (e: any) {
       results.push({

@@ -387,9 +387,9 @@ export default function ChatDetailPage() {
           {/* Metadata Row (Storage transparency & date) */}
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-zinc-400 pl-12">
             {/* Storage path badge */}
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-mono text-[11px] border border-black/[0.04] dark:border-white/[0.06]">
-              <Folder className="w-3 h-3 text-zinc-400" />
-              <span>data/conversations.json</span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-mono text-[11px] border border-black/[0.04] dark:border-white/[0.06]">
+              <Folder className="w-3 h-3 text-blue-500" />
+              <span>Desktop/Recall_Vault/chats</span>
             </span>
 
             {/* Project association if linked */}

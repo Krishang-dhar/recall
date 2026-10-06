@@ -9,7 +9,7 @@ import { ConnectorSidePanel } from '@/components/ConnectorSidePanel';
 import { PLUGINS_DATA, PluginMeta } from '@/components/PluginIcon';
 import { DayScheduleSection } from '@/components/DayScheduleSection';
 import { TaskComposer } from '@/components/TaskComposer';
-import { DemoOnboardingModal } from '@/components/DemoOnboardingModal';
+import { OnboardingModal } from '@/components/OnboardingModal';
 import { Task } from '@/lib/types';
 import { Plus } from 'lucide-react';
 import { useUserSession } from '@/lib/user-session';
@@ -74,18 +74,20 @@ function TodayPageContent() {
     window.addEventListener('open-connector-panel', handleOpenConnector as EventListener);
 
     try {
-      const completed = localStorage.getItem('recall_demo_onboarding_completed');
+      const completed = localStorage.getItem('recall_onboarding_completed') || localStorage.getItem('recall_demo_onboarding_completed');
       if (!completed) {
         setIsOnboardingOpen(true);
       }
     } catch {}
 
     const handleOpenOnboarding = () => setIsOnboardingOpen(true);
+    window.addEventListener('open-onboarding', handleOpenOnboarding);
     window.addEventListener('open-demo-onboarding', handleOpenOnboarding);
 
     return () => {
       window.removeEventListener('open-task-composer', handleOpenComposer);
       window.removeEventListener('open-connector-panel', handleOpenConnector as EventListener);
+      window.removeEventListener('open-onboarding', handleOpenOnboarding);
       window.removeEventListener('open-demo-onboarding', handleOpenOnboarding);
     };
   }, []);
@@ -283,8 +285,8 @@ function TodayPageContent() {
         }}
       />
 
-      {/* Friend Demo / Preview Onboarding Modal */}
-      <DemoOnboardingModal
+      {/* Mandatory Onboarding & Workspace Setup Modal */}
+      <OnboardingModal
         isOpen={isOnboardingOpen}
         onClose={(promptToTry) => {
           setIsOnboardingOpen(false);

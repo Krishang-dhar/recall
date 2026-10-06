@@ -3,39 +3,10 @@ import { disconnectGoogle, getGoogleTokens, getAuthenticatedOAuthClient } from '
 import { google } from 'googleapis';
 
 export async function GET(req: NextRequest) {
-  const sessionMode = req.headers.get('x-session-mode') || 'guest';
-
-  // Guest users must never see connected personal credentials or status
-  if (sessionMode === 'guest') {
-    return NextResponse.json({
-      google: {
-        connected: false,
-        calendar: false,
-        gmail: false,
-        email: undefined,
-      },
-      whatsapp: {
-        connected: false,
-        phoneNumberId: undefined,
-        recipient: undefined,
-      },
-      maps: {
-        connected: true,
-        mode: 'automatic',
-      },
-      intelligence: {
-        connected: Boolean(
-          process.env.GEMINI_API_KEY &&
-          !process.env.GEMINI_API_KEY.includes('placeholder')
-        ),
-        provider: 'Gemini',
-      },
-    });
-  }
-
   const tokens = await getGoogleTokens();
   const isGoogleConnected = Boolean(tokens && (tokens.access_token || tokens.refresh_token));
   let userEmail: string | undefined;
+  let userName: string | undefined;
 
   if (isGoogleConnected) {
     try {
@@ -44,16 +15,15 @@ export async function GET(req: NextRequest) {
         const gmail = google.gmail({ version: 'v1', auth });
         const profile = await gmail.users.getProfile({ userId: 'me' });
         userEmail = profile.data.emailAddress || undefined;
+        if (userEmail) {
+          const usernamePart = userEmail.split('@')[0];
+          userName = usernamePart.charAt(0).toUpperCase() + usernamePart.slice(1);
+        }
       }
-    } catch {
-      // Ignore if rate limited or scope missing
+    } catch (e) {
+      console.warn('Error fetching Google user profile:', e);
     }
   }
-
-  const isWhatsAppConfigured = Boolean(
-    process.env.META_WHATSAPP_TOKEN &&
-    !process.env.META_WHATSAPP_TOKEN.includes('PASTE_NEW_TOKEN_HERE')
-  );
 
   return NextResponse.json({
     google: {
@@ -61,6 +31,7 @@ export async function GET(req: NextRequest) {
       calendar: isGoogleConnected,
       gmail: isGoogleConnected,
       email: userEmail || undefined,
+      name: userName || (userEmail ? userEmail.split('@')[0] : undefined),
     },
     whatsapp: {
       connected: false,

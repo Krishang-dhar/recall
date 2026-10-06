@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sun, Moon, SlidersHorizontal, Save } from 'lucide-react';
+import { Sun, Moon, SlidersHorizontal, Save, PanelLeft } from 'lucide-react';
 import { useTheme } from '@/lib/theme';
 import { useUserSession } from '@/lib/user-session';
 
@@ -45,8 +45,18 @@ export const Header: React.FC = () => {
   return (
     <header className="sticky top-0 z-40 w-full bg-[#F8F9FD]/85 dark:bg-[#212121]/85 backdrop-blur-xl border-b border-black/[0.04] dark:border-white/[0.06] transition-colors py-2.5 px-4 sm:px-8">
       <div className="max-w-[1020px] mx-auto flex items-center justify-between">
-        {/* Left: Drawer Toggle + Recall 3D Logo + Title / Back Link */}
-        <div className="flex items-center gap-2">
+        {/* Left: Sidebar Toggle + Recall 3D Logo + Title / Back Link */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('toggle-sidebar'))}
+            title="Toggle sidebar (⌘\)"
+            aria-label="Toggle sidebar"
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors border border-black/[0.04] dark:border-white/[0.08] cursor-pointer active:scale-95 shrink-0"
+          >
+            <PanelLeft className="w-4 h-4 stroke-[1.8]" />
+          </button>
+
           {isSettingsOrAccount ? (
             <Link
               href="/"

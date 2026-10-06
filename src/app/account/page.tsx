@@ -45,24 +45,6 @@ export default function AccountPage() {
 
   useEffect(() => {
     async function loadData() {
-      if (session.isGuest) {
-        setGoogleConnected(false);
-        setGoogleEmail(null);
-        setWhatsAppRecipient(null);
-        try {
-          const guestTasks = JSON.parse(localStorage.getItem('recall_guest_tasks') || '[]');
-          const guestConvs = JSON.parse(localStorage.getItem('recall_guest_conversations') || '[]');
-          setStats({
-            tasks: Array.isArray(guestTasks) ? guestTasks.length : 0,
-            conversations: Array.isArray(guestConvs) ? guestConvs.length : 0,
-            projects: 0,
-          });
-        } catch {
-          setStats({ tasks: 0, conversations: 0, projects: 0 });
-        }
-        return;
-      }
-
       try {
         const [statusRes, tasksRes, convsRes, projsRes, billRes] = await Promise.all([
           fetch('/api/google/status', {
@@ -78,6 +60,9 @@ export default function AccountPage() {
         if (statusData?.google?.connected) {
           setGoogleConnected(true);
           setGoogleEmail(statusData.google.email || null);
+          if (statusData.google.name && (!userName || userName === 'Guest')) {
+            setUserName(statusData.google.name);
+          }
         } else {
           setGoogleConnected(false);
           setGoogleEmail(null);
@@ -89,21 +74,36 @@ export default function AccountPage() {
           setWhatsAppRecipient(null);
         }
 
-        const tasksData = await tasksRes.json();
-        const convsData = await convsRes.json();
-        const projsData = await projsRes.json();
+        if (session.isGuest && !statusData?.google?.connected) {
+          try {
+            const guestTasks = JSON.parse(localStorage.getItem('recall_guest_tasks') || '[]');
+            const guestConvs = JSON.parse(localStorage.getItem('recall_guest_conversations') || '[]');
+            setStats({
+              tasks: Array.isArray(guestTasks) ? guestTasks.length : 0,
+              conversations: Array.isArray(guestConvs) ? guestConvs.length : 0,
+              projects: 0,
+            });
+          } catch {
+            setStats({ tasks: 0, conversations: 0, projects: 0 });
+          }
+        } else {
+          const tasksData = await tasksRes.json();
+          const convsData = await convsRes.json();
+          const projsData = await projsRes.json();
+          setStats({
+            tasks: tasksData.tasks?.length || 0,
+            conversations: convsData.conversations?.length || 0,
+            projects: projsData.projects?.length || 0,
+          });
+        }
+
         const billData = await billRes.json();
-
-        setStats({
-          tasks: tasksData.tasks?.length || 0,
-          conversations: convsData.conversations?.length || 0,
-          projects: projsData.projects?.length || 0,
-        });
-
         if (billData?.subscription) {
           setSubscription(billData.subscription);
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('Failed to load account data', e);
+      }
     }
     loadData();
   }, [session.mode, session.isGuest]);

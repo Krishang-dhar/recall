@@ -109,6 +109,7 @@ export const RecallFlowOverlay: React.FC = () => {
       }
     };
 
+    window.addEventListener('open-onboarding', handleOpenOnboarding);
     window.addEventListener('open-demo-onboarding', handleOpenOnboarding);
     window.addEventListener('recall-onboarding-closed', handleCloseOnboarding);
 
@@ -165,6 +166,7 @@ export const RecallFlowOverlay: React.FC = () => {
       window.removeEventListener('focusin', handleFocusIn, true);
       document.removeEventListener('selectionchange', handleSelectionChange, true);
       window.removeEventListener('recall-flow-settings-changed', handleSettingsEvent);
+      window.removeEventListener('open-onboarding', handleOpenOnboarding);
       window.removeEventListener('open-demo-onboarding', handleOpenOnboarding);
       window.removeEventListener('recall-onboarding-closed', handleCloseOnboarding);
     };

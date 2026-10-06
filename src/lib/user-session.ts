@@ -102,9 +102,59 @@ export function useUserSession(): {
   setMode: (mode: SessionMode, extraData?: any) => void;
   resetGuestData: () => void;
 } {
-  const [session, setSession] = useState<UserIdentity>(GUEST_USER);
+  const [session, setSession] = useState<UserIdentity>(getUserIdentity());
 
   useEffect(() => {
+    // 1. Check for URL redirect parameters from OAuth callback
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search);
+      const isConnectedGoogle = searchParams.get('connected') === 'google';
+      const urlEmail = searchParams.get('email');
+      const urlName = searchParams.get('name');
+
+      if (isConnectedGoogle || urlEmail) {
+        const email = urlEmail || undefined;
+        const name = urlName || (email ? email.split('@')[0] : 'Google User');
+        setSessionMode('google', { email, name });
+        setSession(getUserIdentity());
+
+        // Clean up URL parameters cleanly without reloading
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('connected');
+        cleanUrl.searchParams.delete('mode');
+        cleanUrl.searchParams.delete('email');
+        cleanUrl.searchParams.delete('name');
+        window.history.replaceState({}, document.title, cleanUrl.pathname + (cleanUrl.search || ''));
+      }
+    }
+
+    // 2. Fetch server Google status to ensure local session matches real server tokens
+    fetch('/api/google/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.google?.connected && data.google?.email) {
+          const currentMode = localStorage.getItem('recall_session_mode');
+          if (currentMode !== 'owner') {
+            const currentGoogleUser = localStorage.getItem('recall_google_user');
+            const newUserData = {
+              email: data.google.email,
+              name: data.google.name || data.google.email.split('@')[0],
+            };
+            if (currentMode !== 'google' || !currentGoogleUser) {
+              setSessionMode('google', newUserData);
+              setSession(getUserIdentity());
+            }
+          }
+        } else if (data?.google?.connected === false) {
+          const currentMode = localStorage.getItem('recall_session_mode');
+          if (currentMode === 'google') {
+            setSessionMode('guest');
+            setSession(getUserIdentity());
+          }
+        }
+      })
+      .catch(() => {});
+
     setSession(getUserIdentity());
 
     const handleUpdate = () => {
