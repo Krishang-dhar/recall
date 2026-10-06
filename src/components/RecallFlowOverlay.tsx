@@ -79,11 +79,11 @@ export const RecallFlowOverlay: React.FC = () => {
         setPosition({ x: defaultX, y: defaultY });
       }
 
-      const onboardingCompleted = localStorage.getItem('recall_demo_onboarding_completed') === 'true';
-      setIsOnboardingActive(!onboardingCompleted);
+      // Floating orb is always visible by default
+      setIsOnboardingActive(false);
 
       const guideSeen = localStorage.getItem('recall_flow_guide_seen');
-      if (!guideSeen && onboardingCompleted) {
+      if (!guideSeen) {
         setShowGuide(true);
       }
 
@@ -103,10 +103,6 @@ export const RecallFlowOverlay: React.FC = () => {
 
     const handleCloseOnboarding = () => {
       setIsOnboardingActive(false);
-      const guideSeen = localStorage.getItem('recall_flow_guide_seen');
-      if (!guideSeen) {
-        setShowGuide(true);
-      }
     };
 
     window.addEventListener('open-demo-onboarding', handleOpenOnboarding);
@@ -236,10 +232,12 @@ export const RecallFlowOverlay: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('trigger-recall-flow', handleCustomTrigger);
+    window.addEventListener('open-recall-flow', handleCustomTrigger);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('trigger-recall-flow', handleCustomTrigger);
+      window.removeEventListener('open-recall-flow', handleCustomTrigger);
     };
   }, [isExpanded, phase]);
 

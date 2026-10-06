@@ -241,6 +241,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ),
     },
     {
+      label: 'Recall Flow',
+      href: '/flow',
+      count: 0,
+      badge: 'Voice',
+      icon: (
+        <svg className="w-4 h-4 stroke-[2]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+          <line x1="12" x2="12" y1="19" y2="22" />
+        </svg>
+      ),
+    },
+    {
       label: 'Tools & Features',
       href: '/tools',
       count: 0,
@@ -383,7 +396,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       <span>{item.label}</span>
                     </div>
 
-                    {item.count > 0 && (
+                    {item.count > 0 ? (
                       <span
                         className={`text-[10px] px-1.5 py-0.5 rounded-md font-mono ${
                           isActive
@@ -393,7 +406,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       >
                         {item.count}
                       </span>
-                    )}
+                    ) : (item as any).badge ? (
+                      <span
+                        className={`text-[9.5px] px-1.5 py-0.5 rounded-md font-semibold tracking-tight ${
+                          isActive
+                            ? 'bg-white/25 text-white'
+                            : 'bg-blue-50 dark:bg-blue-950/60 text-[#0052FF] dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/50'
+                        }`}
+                      >
+                        {(item as any).badge}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}

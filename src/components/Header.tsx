@@ -37,6 +37,7 @@ export const Header: React.FC = () => {
     { label: 'Today', href: '/' },
     { label: 'Upcoming', href: '/upcoming' },
     { label: 'Completed', href: '/completed' },
+    { label: 'Recall Flow', href: '/flow' },
     { label: 'Tools', href: '/tools' },
   ];
 
