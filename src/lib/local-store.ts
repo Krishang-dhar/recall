@@ -515,7 +515,7 @@ export function globalSearch(query: string): SearchResultItem[] {
         title: c.title,
         subtitle: c.projectName ? `Project: ${c.projectName}` : c.lastMessage,
         type: 'chat',
-        url: `/?chatId=${c.id}`,
+        url: `/chat/${c.id}`,
       });
     }
   }

@@ -356,7 +356,7 @@ export default function ProjectDetailPage() {
               conversations.map((c) => (
                 <Link
                   key={c.id}
-                  href={`/?chatId=${c.id}`}
+                  href={`/chat/${c.id}`}
                   className="p-3 rounded-2xl bg-white border border-black/[0.04] shadow-2xs hover:shadow-xs transition-all flex items-center justify-between gap-2 group cursor-pointer"
                 >
                   <div className="min-w-0">

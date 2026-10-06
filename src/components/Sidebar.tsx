@@ -12,6 +12,7 @@ import {
   SlidersHorizontal,
   MessageSquare,
   Trash2,
+  Pencil,
   Mic,
   RotateCcw,
   ChevronRight,
@@ -121,6 +122,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
       }
       window.dispatchEvent(new CustomEvent('recall-conversations-changed'));
     } catch (e) {}
+  };
+
+  const handleRenameConversation = async (e: React.MouseEvent, id: string, currentTitle: string) => {
+    e.stopPropagation();
+    const newTitle = window.prompt('Rename chat:', currentTitle);
+    if (!newTitle || newTitle.trim() === currentTitle) return;
+    const trimmed = newTitle.trim();
+    if (session.isGuest) {
+      try {
+        const raw = localStorage.getItem('recall_guest_conversations');
+        if (raw) {
+          const parsed = JSON.parse(raw).map((c: any) => (c.id === id ? { ...c, title: trimmed } : c));
+          localStorage.setItem('recall_guest_conversations', JSON.stringify(parsed));
+          setConversations(parsed);
+        }
+      } catch {}
+    } else {
+      try {
+        await fetch(`/api/conversations/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: trimmed }),
+        });
+        setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
+      } catch {}
+    }
+    window.dispatchEvent(new CustomEvent('recall-conversations-changed'));
   };
 
   const navItems = [
@@ -430,22 +458,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           </div>
 
-          {/* 4. Recent Conversations */}
+          {/* 4. Recent Conversations (ChatGPT / Notion Style) */}
           <div className="space-y-1">
             <div className="flex items-center justify-between px-2">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
-                Recent Chats
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                  Recent Chats
+                </span>
+                {conversations.length > 0 && (
+                  <span className="text-[10px] font-mono text-zinc-400">
+                    {conversations.length}
+                  </span>
+                )}
+              </div>
+
+              {onNewChat && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onNewChat();
+                    if (window.innerWidth < 768) onToggle();
+                  }}
+                  className="p-1 rounded-md text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/[0.04] transition-colors cursor-pointer"
+                  title="New chat"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
-            <div className="space-y-0.5 pt-1">
+            <div className="space-y-0.5 pt-1 max-h-[280px] overflow-y-auto scrollbar-thin">
               {conversations.length === 0 ? (
                 <div className="px-2.5 py-2 text-[11px] text-zinc-400 font-normal">
                   No previous chats
                 </div>
               ) : (
-                conversations.slice(0, 5).map((conv) => {
-                  const isSelected = activeConversationId === conv.id;
+                conversations.map((conv) => {
+                  const isSelected =
+                    activeConversationId === conv.id || pathname === `/chat/${conv.id}`;
                   return (
                     <div
                       key={conv.id}
@@ -455,23 +505,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       }}
                       className={`group flex items-center justify-between px-2.5 py-1.5 rounded-xl text-xs transition-colors cursor-pointer ${
                         isSelected
-                          ? 'bg-blue-50/70 text-zinc-900 font-medium'
-                          : 'text-zinc-600 hover:text-zinc-900 hover:bg-black/[0.04]'
+                          ? 'bg-blue-50/80 text-blue-900 dark:bg-blue-950/40 dark:text-blue-300 font-medium'
+                          : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <MessageSquare className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+                        <MessageSquare
+                          className={`w-3.5 h-3.5 shrink-0 ${
+                            isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-400'
+                          }`}
+                        />
                         <span className="truncate">{conv.title}</span>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteConversation(e, conv.id)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 text-zinc-400 hover:text-red-600 transition-opacity"
-                        title="Delete chat"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={(e) => handleRenameConversation(e, conv.id, conv.title)}
+                          className="p-1 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/[0.04] rounded transition-colors"
+                          title="Rename chat"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteConversation(e, conv.id)}
+                          className="p-1 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors"
+                          title="Delete chat"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
                   );
                 })

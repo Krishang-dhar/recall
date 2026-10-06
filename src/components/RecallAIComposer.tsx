@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Send,
   Loader2,
@@ -16,6 +17,7 @@ import {
   Copy,
   Check,
   Terminal,
+  ExternalLink,
 } from 'lucide-react';
 import { RECALL_SLASH_COMMANDS, SlashCommand } from '@/lib/slash-commands';
 import { VoiceOrb, VoiceOrbState } from './VoiceOrb';
@@ -2722,11 +2724,23 @@ function getDynamicExecutionPlan(textToSend: string): {
                     <img src="/recall-logo.png" alt="Recall" className="w-3.5 h-3.5 object-contain" />
                   </div>
                   <div>
-                    <h3 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-white">
-                      Recall Chat
-                    </h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="text-xs sm:text-sm font-semibold text-zinc-900 dark:text-white">
+                        Recall Chat
+                      </h3>
+                      {activeConversationId && (
+                        <Link
+                          href={`/chat/${activeConversationId}`}
+                          className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5 ml-1 font-medium"
+                          title="Open dedicated page for this chat"
+                        >
+                          <span>Full page</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </Link>
+                      )}
+                    </div>
                     <span className="text-[10px] text-zinc-400">
-                      {chatMessages.length} {chatMessages.length === 1 ? 'message' : 'messages'} · Saved to desktop folder
+                      {chatMessages.length} {chatMessages.length === 1 ? 'message' : 'messages'} · Saved in data/conversations.json
                     </span>
                   </div>
                 </div>

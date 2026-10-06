@@ -79,7 +79,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
 
   const handleSelectConversation = (conversationId: string) => {
     setActiveChatId(conversationId);
-    router.push(`/?chatId=${conversationId}`);
+    router.push(`/chat/${conversationId}`);
   };
 
   return (
