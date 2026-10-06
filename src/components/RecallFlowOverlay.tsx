@@ -388,18 +388,40 @@ export const RecallFlowOverlay: React.FC = () => {
   const stopAndProcess = async (overrideIntent?: 'write' | 'action' | 'ask') => {
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try { mediaRecorderRef.current.stop(); } catch {}
+    // 1. Stop SpeechRecognition
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
     }
+
+    // 2. Await MediaRecorder stop gracefully to flush all audio chunks
+    let audioBlob: Blob | null = null;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      await new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve();
+        try {
+          recorder.stop();
+        } catch {
+          resolve();
+        }
+      });
+      if (audioChunksRef.current.length > 0) {
+        audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+      }
+    } else if (audioChunksRef.current.length > 0) {
+      audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    }
+
     cleanupMicrophone();
 
     let textToProcess = transcriptRef.current.trim();
 
     // Audio base64 backup if transcript wasn't populated by SpeechRec
     let audioBase64: string | undefined = undefined;
-    if (!textToProcess && audioChunksRef.current.length > 0) {
+    const mimeTypeToSend = audioBlob?.type || recorder?.mimeType || 'audio/webm';
+    if (audioBlob && audioBlob.size > 200) {
       try {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         const reader = new FileReader();
         audioBase64 = await new Promise<string>((resolve) => {
           reader.onloadend = () => {
@@ -407,7 +429,7 @@ export const RecallFlowOverlay: React.FC = () => {
             const base64 = res.split(',')[1] || '';
             resolve(base64);
           };
-          reader.readAsDataURL(audioBlob);
+          reader.readAsDataURL(audioBlob!);
         });
       } catch (err) {
         console.warn('Audio base64 notice:', err);
@@ -416,7 +438,7 @@ export const RecallFlowOverlay: React.FC = () => {
 
     if (!textToProcess && !audioBase64) {
       setPhase('error');
-      setErrorMessage("Didn't catch that.");
+      setErrorMessage("Didn't catch that. Please speak again.");
       scheduleCollapse(2000);
       return;
     }
@@ -437,7 +459,7 @@ export const RecallFlowOverlay: React.FC = () => {
         body: JSON.stringify({
           transcript: textToProcess,
           audioBase64: audioBase64,
-          mimeType: 'audio/webm',
+          mimeType: mimeTypeToSend,
           context: {
             activeApplication: 'recall-web',
             selectedText: selectionRangeRef.current?.text || '',

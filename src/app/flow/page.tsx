@@ -10,6 +10,11 @@ import {
   X,
   CheckCircle2,
   Loader2,
+  Copy,
+  Check,
+  RotateCcw,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { VoiceOrb } from '@/components/VoiceOrb';
 import { Switch } from '@/components/ui/switch';
@@ -19,6 +24,7 @@ import { FlowDictionaryTerm } from '@/lib/flow-settings';
 import { cn } from '@/lib/utils';
 import { RecallSelect, SelectOption } from '@/components/RecallSelect';
 import { useRecallFlowEngine } from '@/lib/useRecallFlowEngine';
+import { PluginIcon } from '@/components/PluginIcon';
 
 const INPUT_LANGUAGE_OPTIONS: SelectOption[] = [
   { value: 'auto', label: 'Auto Detect', sublabel: 'Listens to English, Hindi, Spanish, etc.' },
@@ -34,8 +40,9 @@ const INPUT_LANGUAGE_OPTIONS: SelectOption[] = [
 ];
 
 const OUTPUT_LANGUAGE_OPTIONS: SelectOption[] = [
-  { value: 'en', label: 'English (Cleaned)', sublabel: 'Transcribed & polished' },
+  { value: 'auto', label: 'Auto (English)', sublabel: 'Transcribed & polished in English' },
   { value: 'same', label: 'Same as Spoken', sublabel: 'No language translation' },
+  { value: 'en', label: 'English', sublabel: 'Standard English' },
   { value: 'hi', label: 'Hindi (हिंदी)', sublabel: 'Translated to Hindi' },
   { value: 'es', label: 'Spanish (Español)' },
   { value: 'fr', label: 'French (Français)' },
@@ -51,6 +58,9 @@ export default function RecallFlowPage() {
     volume,
     resultHeadline,
     resultDetails,
+    askAnswer,
+    toolInfo,
+    choices,
     errorMessage,
     copiedSuccess,
     settings,
@@ -58,8 +68,11 @@ export default function RecallFlowPage() {
     stopAndProcess: stopAndProcessFlow,
     cancel: cancelHeroFlow,
     updateSettings: update,
+    copyResult,
   } = useRecallFlowEngine({ autoInsert: false });
 
+  const [isMounted, setIsMounted] = useState(false);
+  const [isRewriting, setIsRewriting] = useState(false);
   const [selectedStyle, setSelectedStyle] = useState<'natural' | 'professional' | 'casual' | 'concise' | 'exact'>(
     (settings.style as any) || 'natural'
   );
@@ -67,10 +80,39 @@ export default function RecallFlowPage() {
   const [isOrbHovered, setIsOrbHovered] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (settings.style && ['natural', 'professional', 'casual', 'concise', 'exact'].includes(settings.style)) {
       setSelectedStyle(settings.style as any);
     }
   }, [settings.style]);
+
+  const handleRewrite = async (style: string = 'concise') => {
+    const textToRewrite = cleanedResult || resultDetails || liveTranscript;
+    if (!textToRewrite) return;
+    setIsRewriting(true);
+    try {
+      const res = await fetch('/api/ai/flow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: textToRewrite,
+          userPreferences: { style },
+          chosenIntent: 'write',
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.rewrittenText) {
+        copyResult();
+      }
+    } catch (e) {
+      console.warn('Rewrite error:', e);
+    } finally {
+      setIsRewriting(false);
+    }
+  };
 
   // Keyboard shortcut listener: Enter to stop when listening, Escape to cancel
   useEffect(() => {
@@ -334,41 +376,186 @@ export default function RecallFlowPage() {
 
         {/* ── 5. SUCCESS STATE ── */}
         {flowPhase === 'success' && (
-          <div className="max-w-md w-full px-4 animate-in fade-in zoom-in-95 duration-200 space-y-2.5 flex flex-col items-center">
-            <div className="w-full p-4 rounded-2xl bg-emerald-50/90 border border-emerald-200/80 shadow-xs space-y-2 text-left">
-              <div className="flex items-center justify-between text-xs font-semibold text-emerald-800">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>{resultHeadline || 'Cleaned & formatted'}</span>
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {copiedSuccess && (
-                    <span className="text-[11px] text-emerald-700 bg-white/80 px-2.5 py-0.5 rounded-full border border-emerald-200 font-medium">
-                      Copied to clipboard ✓
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={cancelHeroFlow}
-                    className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 hover:bg-black/5 transition-colors cursor-pointer"
-                    title="Dismiss (Esc)"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+          <div className="max-w-md w-full px-4 animate-in fade-in zoom-in-95 duration-200 space-y-3 flex flex-col items-center">
+            <div className="w-full p-4.5 rounded-2xl bg-white dark:bg-[#1c1c1f] border border-black/[0.08] dark:border-white/[0.1] shadow-lg space-y-3 text-left">
+              <div className="flex items-center justify-between pb-2 border-b border-black/[0.05] dark:border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4 stroke-[2.2]" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-semibold text-zinc-900 dark:text-white">
+                      {resultHeadline || 'Cleaned & formatted'}
+                    </h4>
+                    {/* Tool Badges if tools were triggered */}
+                    {toolInfo && (toolInfo.calendar || toolInfo.whatsapp || toolInfo.task) && (
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {toolInfo.calendar && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                            <PluginIcon id="calendar" size={12} />
+                            <span>Calendar</span>
+                          </span>
+                        )}
+                        {toolInfo.whatsapp && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                            <PluginIcon id="whatsapp" size={12} />
+                            <span>WhatsApp</span>
+                          </span>
+                        )}
+                        {toolInfo.task && (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                            <Check className="w-3 h-3 text-emerald-500" />
+                            <span>Task</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs font-semibold text-zinc-900 leading-relaxed">
-                “{cleanedResult || resultDetails || liveTranscript}”
-              </p>
-            </div>
 
-            <button
-              type="button"
-              onClick={cancelHeroFlow}
-              className="text-xs text-zinc-500 hover:text-zinc-900 px-3 py-1 rounded-full hover:bg-black/5 transition-colors cursor-pointer"
-            >
-              Done
-            </button>
+                <button
+                  type="button"
+                  onClick={cancelHeroFlow}
+                  className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  title="Dismiss (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Result Details / Cleaned Content */}
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-black/[0.04] dark:border-white/[0.04]">
+                <p className="text-xs sm:text-sm font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed break-words whitespace-pre-wrap">
+                  {cleanedResult || resultDetails || liveTranscript}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={copyResult}
+                    className="h-8 px-3 rounded-lg text-xs font-medium cursor-pointer"
+                  >
+                    {copiedSuccess ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-500 mr-1" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 mr-1 text-zinc-400" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={isRewriting}
+                    onClick={() => handleRewrite('concise')}
+                    className="h-8 px-2.5 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white cursor-pointer"
+                  >
+                    {isRewriting ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                    ) : (
+                      <RotateCcw className="w-3.5 h-3.5 mr-1" />
+                    )}
+                    <span>Rewrite</span>
+                  </Button>
+                </div>
+
+                <Button
+                  size="sm"
+                  onClick={startHeroFlow}
+                  className="h-8 px-3.5 rounded-lg bg-zinc-900 hover:bg-black text-white text-xs font-semibold cursor-pointer"
+                >
+                  <Mic className="w-3.5 h-3.5 mr-1" />
+                  <span>Speak again</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 6. ASK / KNOWLEDGE STATE ── */}
+        {flowPhase === 'ask' && (
+          <div className="max-w-md w-full px-4 animate-in fade-in zoom-in-95 duration-200 space-y-3 flex flex-col items-center">
+            <div className="w-full p-4.5 rounded-2xl bg-white dark:bg-[#1c1c1f] border border-black/[0.08] dark:border-white/[0.1] shadow-lg space-y-3 text-left">
+              <div className="flex items-center justify-between pb-2 border-b border-black/[0.05] dark:border-white/[0.06]">
+                <div className="flex items-center gap-2">
+                  <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-[#0052FF] via-[#00D2FF] to-[#7928CA] flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/recall-logo.png" alt="Recall" className="w-3 h-3 object-contain" />
+                  </div>
+                  <h4 className="text-xs font-semibold text-zinc-900 dark:text-white">
+                    Recall Intelligence
+                  </h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={cancelHeroFlow}
+                  className="p-1 rounded-full text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-black/5 transition-colors cursor-pointer"
+                  title="Dismiss (Esc)"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/60 border border-black/[0.04] dark:border-white/[0.04]">
+                <p className="text-xs sm:text-sm font-normal text-zinc-800 dark:text-zinc-200 leading-relaxed whitespace-pre-wrap">
+                  {askAnswer || 'Here is what was found.'}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    navigator.clipboard.writeText(askAnswer);
+                  }}
+                  className="h-8 px-3 rounded-lg text-xs font-medium cursor-pointer"
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1 text-zinc-400" />
+                  <span>Copy answer</span>
+                </Button>
+
+                <Button
+                  size="sm"
+                  onClick={startHeroFlow}
+                  className="h-8 px-3.5 rounded-lg bg-zinc-900 hover:bg-black text-white text-xs font-semibold cursor-pointer"
+                >
+                  <Mic className="w-3.5 h-3.5 mr-1" />
+                  <span>Ask again</span>
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── 7. NEEDS CHOICE STATE ── */}
+        {flowPhase === 'needs_choice' && (
+          <div className="max-w-md w-full px-4 animate-in fade-in zoom-in-95 duration-200 space-y-3 flex flex-col items-center">
+            <div className="w-full p-4.5 rounded-2xl bg-white dark:bg-[#1c1c1f] border border-black/[0.08] dark:border-white/[0.1] shadow-lg space-y-3 text-center">
+              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 block">
+                Choose mode for: “{liveTranscript}”
+              </span>
+              <div className="flex items-center justify-center gap-2 pt-1">
+                {choices.map((c) => (
+                  <Button
+                    key={c.id}
+                    onClick={() => stopAndProcessFlow(c.id)}
+                    className="h-8 px-4 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-semibold cursor-pointer"
+                  >
+                    {c.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 
@@ -428,7 +615,7 @@ export default function RecallFlowPage() {
                 I speak:
               </label>
               <RecallSelect
-                value={settings.inputLanguage}
+                value={isMounted ? settings.inputLanguage : 'auto'}
                 onChange={(val) => update({ inputLanguage: val })}
                 options={INPUT_LANGUAGE_OPTIONS}
                 ariaLabel="Spoken input language"
@@ -441,7 +628,7 @@ export default function RecallFlowPage() {
                 Output as:
               </label>
               <RecallSelect
-                value={settings.outputLanguage}
+                value={isMounted ? settings.outputLanguage : 'auto'}
                 onChange={(val) => update({ outputLanguage: val })}
                 options={OUTPUT_LANGUAGE_OPTIONS}
                 ariaLabel="Written output language"

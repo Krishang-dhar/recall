@@ -139,11 +139,11 @@ export const RecallSelect: React.FC<RecallSelectProps> = ({
         />
 
         {/* Selected Label or Placeholder */}
-        <span className="truncate flex items-center gap-2 text-zinc-900">
+        <span suppressHydrationWarning className="truncate flex items-center gap-2 text-zinc-900">
           {selectedOption?.icon && (
             <span className="shrink-0">{selectedOption.icon}</span>
           )}
-          <span className={cn('truncate', !selectedOption && 'text-zinc-400 font-normal')}>
+          <span suppressHydrationWarning className={cn('truncate', !selectedOption && 'text-zinc-400 font-normal')}>
             {selectedOption ? selectedOption.label : placeholder}
           </span>
         </span>

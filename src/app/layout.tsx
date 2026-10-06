@@ -7,11 +7,8 @@ export const metadata: Metadata = {
   title: 'Recall — AI Work Reminder Assistant',
   description: 'A calm, minimal AI work reminder assistant.',
   icons: {
-    icon: [
-      { url: '/icon.png', type: 'image/png' },
-      { url: '/recall-logo.png', type: 'image/png' },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/recall-logo.png',
+    apple: '/recall-logo.png',
   },
 };
 

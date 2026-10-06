@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   RecallFlowSettings,
+  DEFAULT_FLOW_SETTINGS,
   getFlowSettings,
   saveFlowSettings as saveFlowSettingsUtil,
 } from '@/lib/flow-settings';
@@ -53,7 +54,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
   const [isDirectlyInserted, setIsDirectlyInserted] = useState<boolean | null>(null);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
   const [hasSpoken, setHasSpoken] = useState(false);
-  const [settings, setSettings] = useState<RecallFlowSettings>(() => getFlowSettings());
+  const [settings, setSettings] = useState<RecallFlowSettings>(DEFAULT_FLOW_SETTINGS);
 
   // References
   const activeElementRef = useRef<HTMLElement | null>(null);
@@ -217,20 +218,40 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
     async (overrideIntent?: 'write' | 'action' | 'ask') => {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
 
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        try {
-          mediaRecorderRef.current.stop();
-        } catch {}
+      // 1. Stop SpeechRecognition
+      if (recognitionRef.current) {
+        try { recognitionRef.current.stop(); } catch {}
+        recognitionRef.current = null;
       }
+
+      // 2. Await MediaRecorder stop gracefully to flush all audio chunks
+      let audioBlob: Blob | null = null;
+      const recorder = mediaRecorderRef.current;
+      if (recorder && recorder.state !== 'inactive') {
+        await new Promise<void>((resolve) => {
+          recorder.onstop = () => resolve();
+          try {
+            recorder.stop();
+          } catch {
+            resolve();
+          }
+        });
+        if (audioChunksRef.current.length > 0) {
+          audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        }
+      } else if (audioChunksRef.current.length > 0) {
+        audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      }
+
       cleanupMicrophone();
 
       let textToProcess = transcriptRef.current.trim();
 
-      // Audio base64 backup if transcript wasn't populated by SpeechRec
+      // Audio base64 backup if transcript wasn't populated by SpeechRec (e.g. browser network error)
       let audioBase64: string | undefined = undefined;
-      if (!textToProcess && audioChunksRef.current.length > 0) {
+      const mimeTypeToSend = audioBlob?.type || recorder?.mimeType || 'audio/webm';
+      if (audioBlob && audioBlob.size > 200) {
         try {
-          const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           const reader = new FileReader();
           audioBase64 = await new Promise<string>((resolve) => {
             reader.onloadend = () => {
@@ -238,7 +259,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
               const base64 = res.split(',')[1] || '';
               resolve(base64);
             };
-            reader.readAsDataURL(audioBlob);
+            reader.readAsDataURL(audioBlob!);
           });
         } catch (err) {
           console.warn('Audio base64 notice:', err);
@@ -248,7 +269,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
       // If genuine silence (no text and no audio chunks recorded)
       if (!textToProcess && !audioBase64) {
         setPhase('no_speech');
-        setErrorMessage("Didn't catch that.");
+        setErrorMessage("Didn't catch that. Please speak again.");
         return;
       }
 
@@ -263,7 +284,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
           body: JSON.stringify({
             transcript: textToProcess,
             audioBase64: audioBase64,
-            mimeType: 'audio/webm',
+            mimeType: mimeTypeToSend,
             context: {
               activeApplication: 'recall-web',
               selectedText: selectionRangeRef.current?.text || '',
@@ -555,14 +576,14 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
 
   // Copy cleaned result to clipboard
   const copyResult = useCallback(async () => {
-    const textToCopy = cleanedResult || transcript;
+    const textToCopy = cleanedResult || resultDetails || transcript;
     if (!textToCopy) return;
     try {
       await navigator.clipboard.writeText(textToCopy);
       setCopiedSuccess(true);
       setTimeout(() => setCopiedSuccess(false), 2500);
     } catch {}
-  }, [cleanedResult, transcript]);
+  }, [cleanedResult, resultDetails, transcript]);
 
   return {
     phase,
