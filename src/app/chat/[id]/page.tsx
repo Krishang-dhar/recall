@@ -18,10 +18,12 @@ import {
   Sparkles,
   Pencil,
   CheckCircle2,
+  Mic,
 } from 'lucide-react';
 import { Conversation, Message } from '@/lib/types';
 import { FormattedAIResponse } from '@/components/FormattedAIResponse';
 import { useUserSession } from '@/lib/user-session';
+import { VoiceOrb } from '@/components/VoiceOrb';
 
 function formatChatDate(dateString?: string) {
   if (!dateString) return '';
@@ -554,32 +556,60 @@ export default function ChatDetailPage() {
 
           {/* Bottom Action Bar */}
           <div className="flex items-center justify-between pt-1 border-t border-black/[0.04] dark:border-white/[0.06]">
-            {/* Left: Quick Actions */}
-            <div className="flex items-center gap-1.5">
-              {['Plan my day', 'Review priorities', 'Draft summary'].map((chip) => (
-                <button
-                  key={chip}
-                  type="button"
-                  onClick={() => {
-                    setPromptText(chip);
-                    if (textareaRef.current) textareaRef.current.focus();
-                  }}
-                  className="px-2.5 py-1 rounded-full bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] text-[11px] font-medium text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer"
-                >
-                  {chip}
-                </button>
-              ))}
+            {/* Left: Voice Orb + Quick Actions */}
+            <div className="flex items-center gap-2">
+              <VoiceOrb
+                state={isSending ? 'processing' : 'idle'}
+                size="sm"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-recall-flow'));
+                }}
+              />
+              <div className="hidden sm:flex items-center gap-1.5">
+                {['Plan my day', 'Review priorities', 'Draft summary'].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      setPromptText(chip);
+                      if (textareaRef.current) textareaRef.current.focus();
+                    }}
+                    className="px-2.5 py-1 rounded-full bg-black/[0.03] dark:bg-white/[0.06] hover:bg-black/[0.06] text-[11px] font-medium text-zinc-600 dark:text-zinc-300 transition-colors cursor-pointer"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Right: Big Crisp Send Button */}
-            <button
-              type="submit"
-              disabled={!promptText.trim() || isSending}
-              className="h-9 px-4 rounded-xl bg-zinc-900 hover:bg-black dark:bg-[#ececec] dark:hover:bg-white text-white dark:text-[#171717] flex items-center justify-center gap-1.5 font-semibold text-xs transition-all disabled:opacity-25 disabled:pointer-events-none cursor-pointer shrink-0 active:scale-95 shadow-2xs"
-            >
-              <span>Send</span>
-              <Send className="w-3.5 h-3.5" />
-            </button>
+            {/* Right: Dynamic Mic or Send Button */}
+            {!promptText.trim() ? (
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('open-recall-flow'));
+                }}
+                title="Voice mode"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!promptText.trim() || isSending}
+                className="h-9 px-4 rounded-xl bg-zinc-900 hover:bg-black dark:bg-[#ececec] dark:hover:bg-white text-white dark:text-[#171717] flex items-center justify-center gap-1.5 font-semibold text-xs transition-all disabled:opacity-25 disabled:pointer-events-none cursor-pointer shrink-0 active:scale-95 shadow-2xs"
+              >
+                {isSending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <span>Send</span>
+                    <Send className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </form>
       </footer>

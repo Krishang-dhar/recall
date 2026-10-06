@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar';
 import { GlobalSearchModal } from './GlobalSearchModal';
 import { Header } from './Header';
 import { BottomNavigation } from './BottomNavigation';
+import { RecallFlowOverlay } from './RecallFlowOverlay';
 
 interface WorkspaceShellProps {
   children: React.ReactNode;
@@ -113,6 +114,8 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
         </main>
         <BottomNavigation />
       </div>
+
+      <RecallFlowOverlay />
     </div>
   );
 };

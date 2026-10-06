@@ -12,6 +12,7 @@ import {
   Paperclip,
   CheckSquare,
   Upload,
+  Mic,
   History,
   Copy,
   Check,
@@ -19,6 +20,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { RECALL_SLASH_COMMANDS, SlashCommand } from '@/lib/slash-commands';
+import { VoiceOrb, VoiceOrbState } from './VoiceOrb';
 import { GenerativeUIView } from './GenerativeUIView';
 import { DayPlanWorkspace } from './DayPlanWorkspace';
 import {
@@ -208,6 +210,8 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
   const [isFocused, setIsFocused] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [assistantType, setAssistantType] = useState<AssistantType>('recall');
+  const [voiceState, setVoiceState] = useState<VoiceOrbState>('idle');
+  const [audioVolume, setAudioVolume] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamingText, setStreamingText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -280,11 +284,34 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
   const [selectedSlashIndex, setSelectedSlashIndex] = useState(0);
   const [activeSlashCommand, setActiveSlashCommand] = useState<SlashCommand | null>(null);
   const [isCopiedResponse, setIsCopiedResponse] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+  const lastSoundTimeRef = useRef<number>(Date.now());
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Live Voice & Siri-like AI Presence State
+  const [isLiveVoiceOpen, setIsLiveVoiceOpen] = useState(false);
+  const [liveVoicePhase, setLiveVoicePhase] = useState<'listening' | 'understanding' | 'thinking' | 'speaking'>('listening');
+  const [liveTranscript, setLiveTranscript] = useState('');
+
+  const liveTranscriptRef = useRef<string>('');
+  const isLiveVoiceOpenRef = useRef<boolean>(false);
+  const liveVoicePhaseRef = useRef<'listening' | 'understanding' | 'thinking' | 'speaking'>('listening');
+
+  useEffect(() => {
+    isLiveVoiceOpenRef.current = isLiveVoiceOpen;
+  }, [isLiveVoiceOpen]);
+
+  useEffect(() => {
+    liveVoicePhaseRef.current = liveVoicePhase;
+  }, [liveVoicePhase]);
 
   // Unified Action Card State (Single live progress & result card)
   const [unifiedAction, setUnifiedAction] = useState<UnifiedActionData | null>(null);
@@ -367,20 +394,33 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
 
   useEffect(() => {
     return () => {
+      stopSpeaking();
+      stopMicrophoneStream();
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
     };
   }, []);
+
+  const finishVoiceRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         setShowAttachmentMenu(false);
         setIsHistoryOpen(false);
+        if (isLiveVoiceOpen) {
+          stopMicrophoneStream();
+          setIsLiveVoiceOpen(false);
+          setVoiceState('idle');
+        }
+      } else if (e.key === 'Enter' && isLiveVoiceOpen) {
+        e.preventDefault();
+        finishVoiceRef.current();
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isLiveVoiceOpen]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -413,6 +453,11 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
   });
 
   const handleSelectSlashCommand = (cmd: SlashCommand) => {
+    if (cmd.id === 'flow') {
+      setPrompt('');
+      startVoiceCapture();
+      return;
+    }
     if (cmd.id === 'search') {
       setPrompt('');
       setActiveSlashCommand(null);
@@ -425,7 +470,7 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
     inputRef.current?.focus();
   };
 
-  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && prompt === '' && activeSlashCommand) {
       e.preventDefault();
       setActiveSlashCommand(null);
@@ -458,28 +503,9 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
         return;
       }
     }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      let fullInstruction = prompt.trim();
-      if (activeSlashCommand) {
-        if (fullInstruction) {
-          fullInstruction = `${activeSlashCommand.command} ${fullInstruction}`;
-        } else if (activeSlashCommand.defaultPrompt) {
-          fullInstruction = activeSlashCommand.defaultPrompt;
-        } else {
-          fullInstruction = activeSlashCommand.command;
-        }
-        setActiveSlashCommand(null);
-      }
-      if (fullInstruction) {
-        setPrompt('');
-        handleExecuteInstruction(fullInstruction);
-      }
-    }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setPrompt(val);
     setSelectedSlashIndex(0);
@@ -488,6 +514,21 @@ export const RecallAIComposer: React.FC<RecallAIComposerProps> = ({
     typingTimerRef.current = setTimeout(() => {
       setIsTyping(false);
     }, 1200);
+  };
+
+  const stopMicrophoneStream = () => {
+    if ((mediaRecorderRef as any).currentRecognition) {
+      try {
+        (mediaRecorderRef as any).currentRecognition.stop();
+      } catch (e) {}
+      (mediaRecorderRef as any).currentRecognition = null;
+    }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.stream) {
+      mediaRecorderRef.current.stream.getTracks().forEach((track) => track.stop());
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close().catch(() => {});
+    }
   };
 
 interface ExtractedPromptDetails {
@@ -1361,6 +1402,10 @@ function getDynamicExecutionPlan(textToSend: string): {
         message: error instanceof Error ? error.message : 'Planning failed.',
       }));
     } finally {
+      if (calledFromVoice) {
+        setIsLiveVoiceOpen(false);
+        setVoiceState('idle');
+      }
       setIsTyping(false);
     }
   };
@@ -1378,6 +1423,9 @@ function getDynamicExecutionPlan(textToSend: string): {
       cleanPrompt = 'Rescue my day and recalculate realistic time blocks';
     } else if (cleanPrompt.startsWith('/calendar')) {
       cleanPrompt = 'Show my schedule for today';
+    } else if (cleanPrompt.startsWith('/flow')) {
+      startVoiceCapture();
+      return;
     } else if (cleanPrompt.startsWith('/search')) {
       window.dispatchEvent(new CustomEvent('open-global-search'));
       return;
@@ -1886,13 +1934,244 @@ function getDynamicExecutionPlan(textToSend: string): {
       setPrompt('');
       setAttachedFile(null);
 
+      // Voice response handling - purely visual, no audio spoken aloud
+      if (calledFromVoice) {
+        setIsLiveVoiceOpen(false);
+        setVoiceState('idle');
+      }
     } catch (err) {
       console.error('Recall error:', err);
       setStreamingText("Sorry, I couldn't reach the AI service right now.");
       setIsProcessing(false);
       setIsStreaming(false);
+      if (calledFromVoice) {
+        setIsLiveVoiceOpen(false);
+        setVoiceState('idle');
+      }
     } finally {
+      setVoiceState('idle');
       setIsTyping(false);
+    }
+  };
+
+  const startVoiceCapture = async () => {
+    stopSpeaking();
+    setIsLiveVoiceOpen(true);
+    setLiveVoicePhase('listening');
+    setLiveTranscript('');
+    liveTranscriptRef.current = '';
+    setVoiceState('listening');
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const audioCtx = new AudioCtx();
+      audioContextRef.current = audioCtx;
+      const sourceNode = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      sourceNode.connect(analyser);
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      lastSoundTimeRef.current = Date.now();
+
+      const checkVolume = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
+
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        const normalized = Math.min(avg / 128, 1);
+        setAudioVolume(normalized);
+
+        if (normalized > 0.08) {
+          lastSoundTimeRef.current = Date.now();
+        }
+
+        // Auto pause after 3.5s silence only once actual words were recognized
+        if (
+          liveTranscriptRef.current.trim().length > 3 &&
+          Date.now() - lastSoundTimeRef.current > 3500
+        ) {
+          finishLiveVoiceAndExecute();
+          return;
+        }
+
+        animFrameRef.current = requestAnimationFrame(checkVolume);
+      };
+
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        try {
+          const rec = new SpeechRecognition();
+          rec.continuous = true;
+          rec.interimResults = true;
+          rec.lang = typeof navigator !== 'undefined' && navigator.language ? navigator.language : 'en-US';
+
+          rec.onresult = (e: any) => {
+            let transcript = '';
+            for (let i = 0; i < e.results.length; i++) {
+              transcript += e.results[i][0].transcript;
+            }
+            if (transcript.trim()) {
+              liveTranscriptRef.current = transcript.trim();
+              setLiveTranscript(transcript.trim());
+              setPrompt(transcript.trim());
+              lastSoundTimeRef.current = Date.now();
+            }
+          };
+
+          let hasFatalError = false;
+          rec.onerror = (e: any) => {
+            if (e?.error === 'network' || e?.error === 'not-allowed' || e?.error === 'service-not-allowed') {
+              hasFatalError = true;
+            }
+          };
+
+          rec.onend = () => {
+            // Keep listening continuously if live voice is still active and no fatal error
+            if (!hasFatalError && isLiveVoiceOpenRef.current && liveVoicePhaseRef.current === 'listening') {
+              try {
+                rec.start();
+              } catch (e) {}
+            }
+          };
+
+          rec.start();
+          (mediaRecorderRef as any).currentRecognition = rec;
+        } catch (e) {
+          console.warn('SpeechRecognition fallback to MediaRecorder', e);
+        }
+      }
+
+      animFrameRef.current = requestAnimationFrame(checkVolume);
+
+      const mimeTypes = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+      const supportedType = mimeTypes.find((t) => MediaRecorder.isTypeSupported(t)) || '';
+      const mediaRecorder = new MediaRecorder(stream, supportedType ? { mimeType: supportedType } : {});
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+
+      mediaRecorder.start(200);
+    } catch (err) {
+      console.warn('Voice error:', err);
+      setVoiceState('idle');
+      setIsLiveVoiceOpen(false);
+    }
+  };
+
+  const handleToggleVoice = () => {
+    if (isLiveVoiceOpen) {
+      finishLiveVoiceAndExecute();
+    } else {
+      startVoiceCapture();
+    }
+  };
+
+  const finishLiveVoiceAndExecute = async () => {
+    if (!isLiveVoiceOpenRef.current && !isLiveVoiceOpen && !isProcessing) return;
+    setLiveVoicePhase('understanding');
+
+    // 1. Stop SpeechRecognition
+    if ((mediaRecorderRef as any).currentRecognition) {
+      try {
+        (mediaRecorderRef as any).currentRecognition.stop();
+      } catch (e) {}
+      (mediaRecorderRef as any).currentRecognition = null;
+    }
+
+    // 2. Stop volume analysis loop
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current);
+      animFrameRef.current = null;
+    }
+    setAudioVolume(0);
+
+    // 3. Gracefully flush and stop MediaRecorder
+    let audioBlob: Blob | null = null;
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
+      await new Promise<void>((resolve) => {
+        recorder.onstop = () => resolve();
+        try {
+          recorder.stop();
+        } catch {
+          resolve();
+        }
+      });
+      if (audioChunksRef.current.length > 0) {
+        audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+      }
+    } else if (audioChunksRef.current.length > 0) {
+      audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+    }
+
+    // 4. Stop stream tracks and audio context
+    stopMicrophoneStream();
+
+    // 5. Query resolution: use live transcript ref if available, or call /api/ai/transcribe fallback
+    let query = liveTranscriptRef.current.trim() || liveTranscript.trim() || prompt.trim();
+
+    if (!query && audioBlob && audioBlob.size > 250) {
+      setLiveVoicePhase('thinking');
+      setIsProcessing(true);
+      const formData = new FormData();
+      formData.append('audio', audioBlob);
+      try {
+        const res = await fetch('/api/ai/transcribe', { method: 'POST', body: formData });
+        const d = await res.json();
+        if (d.success && d.text && d.text.trim()) {
+          query = d.text.trim();
+          liveTranscriptRef.current = query;
+          setLiveTranscript(query);
+        }
+      } catch (e) {
+        console.warn('Transcribe request error:', e);
+      }
+    }
+
+    if (query) {
+      setLiveVoicePhase('thinking');
+      handleExecuteInstruction(query, true);
+    } else {
+      // Nothing was spoken
+      setIsLiveVoiceOpen(false);
+      setVoiceState('idle');
+    }
+  };
+
+  finishVoiceRef.current = finishLiveVoiceAndExecute;
+
+
+  const stopVoiceCapture = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    stopMicrophoneStream();
+  };
+
+  const handleOrbClick = () => {
+    if (isLiveVoiceOpen) {
+      finishLiveVoiceAndExecute();
+    } else {
+      startVoiceCapture();
     }
   };
 
@@ -1998,13 +2277,17 @@ function getDynamicExecutionPlan(textToSend: string): {
     }
   };
 
+  const orbCurrentState: VoiceOrbState = isProcessing
+    ? 'processing'
+    : voiceState;
+
   // Decide if we should render 2-column responsive layout
   const hasComplexLayout = Boolean(generativeUI && streamingText);
   const isDayPlan = generativeUI?.type === 'day_plan' && Boolean(generativeUI.planSlots?.length);
 
   return (
     <div className="w-full flex flex-col gap-3">
-      {/* Unified Spacious ChatGPT-Style Hero Composer Bar */}
+      {/* Unified Hero Composer Bar with Inline Voice Transformation */}
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -2012,268 +2295,377 @@ function getDynamicExecutionPlan(textToSend: string): {
         }}
         onDragLeave={() => setIsDraggingOver(false)}
         onDrop={handleDrop}
-        className={`relative rounded-2xl sm:rounded-3xl bg-white dark:bg-[#1f1f23] border p-3 sm:p-4 transition-all duration-200 flex flex-col justify-center ${
-          isDraggingOver
-            ? 'ring-2 ring-blue-500 bg-blue-50/30 border-blue-400'
+        className={`relative rounded-[26px] bg-white border p-3 sm:px-4 sm:py-3.5 transition-all duration-300 flex flex-col justify-center ${
+          isLiveVoiceOpen
+            ? 'min-h-[86px] sm:min-h-[92px] apple-intelligence-composer border-transparent'
+            : isDraggingOver
+            ? 'min-h-[68px] sm:min-h-[74px] ring-2 ring-blue-500 bg-blue-50/30 border-blue-400'
             : isTyping
-            ? 'border-blue-400/80 dark:border-blue-500/80 shadow-[0_8px_30px_rgba(0,82,255,0.12)]'
+            ? 'min-h-[68px] sm:min-h-[74px] composer-typing-aura border-blue-200/90 shadow-[0_8px_30px_rgba(0,82,255,0.12)]'
             : isFocused
-            ? 'border-black/[0.16] dark:border-white/[0.2] shadow-[0_4px_24px_rgba(0,0,0,0.08)]'
-            : 'border-black/[0.08] dark:border-white/[0.1] shadow-[0_4px_20px_rgba(0,0,0,0.03)]'
+            ? 'min-h-[68px] sm:min-h-[74px] border-black/[0.12] shadow-[0_4px_24px_rgba(0,0,0,0.06)]'
+            : 'min-h-[68px] sm:min-h-[74px] border-black/[0.07] shadow-[0_2px_16px_rgba(0,0,0,0.02)]'
         }`}
       >
         {/* Drag over overlay hint */}
         {isDraggingOver && (
-          <div className="absolute inset-0 z-30 rounded-2xl sm:rounded-3xl bg-blue-50/90 dark:bg-blue-950/90 backdrop-blur-xs flex items-center justify-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400 pointer-events-none">
+          <div className="absolute inset-0 z-30 rounded-[26px] bg-blue-50/90 backdrop-blur-xs flex items-center justify-center gap-2 text-sm font-semibold text-blue-600 pointer-events-none">
             <Upload className="w-4 h-4 animate-bounce" />
             <span>Drop files into Recall</span>
           </div>
         )}
 
-        {/* Attached file preview chip */}
-        {attachedFile && (
-          <div className="mb-2.5 px-3 py-1.5 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between w-fit gap-2.5 animate-in fade-in">
-            <div className="flex items-center gap-2 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        {/* Attached file preview chip (when not in voice mode) */}
+        {!isLiveVoiceOpen && attachedFile && (
+          <div className="mb-2 px-2.5 py-1.5 rounded-xl bg-zinc-50 border border-black/[0.05] flex items-center justify-between w-fit gap-2 apple-fade-in">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-700">
               {attachedFile.type.startsWith('image/') ? (
                 <ImageIcon className="w-3.5 h-3.5 text-[#0052FF]" />
               ) : (
                 <FileText className="w-3.5 h-3.5 text-[#0052FF]" />
               )}
-              <span className="truncate max-w-[220px]">{attachedFile.name}</span>
+              <span className="truncate max-w-[200px]">{attachedFile.name}</span>
             </div>
             <button
               type="button"
               onClick={() => setAttachedFile(null)}
-              className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 cursor-pointer p-0.5"
+              className="text-zinc-400 hover:text-zinc-700 cursor-pointer p-0.5"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
 
-        {/* Standard Hero Composer Input Form */}
-        <div className="relative">
-          {/* Floating Slash Command Menu (Opens BELOW input box) */}
-          {prompt.startsWith('/') && !isProcessing && filteredSlashCommands.length > 0 && (
-            <div
-              ref={slashMenuRef}
-              className="absolute left-0 right-0 top-full mt-2 z-50 rounded-2xl bg-white dark:bg-[#18181b] backdrop-blur-2xl border border-black/10 dark:border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.14)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.6)] p-1.5 space-y-0.5 animate-in fade-in zoom-in-95 duration-150 max-h-72 overflow-y-auto select-none"
-            >
-              <div className="px-2.5 py-1.5 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-black/[0.05] dark:border-white/[0.06] mb-1">
-                <span>Commands</span>
-                <span>↑↓ navigate · ↵ select</span>
+        {isLiveVoiceOpen ? (
+          /* Live Voice Inline Transformation within the Bar */
+          <div className="flex items-center justify-between gap-3 sm:gap-4 apple-fade-in">
+            {/* Left: Reactive Voice Orb */}
+            <div className="relative shrink-0 flex items-center pl-0.5">
+              <VoiceOrb
+                state={
+                  liveVoicePhase === 'listening'
+                    ? 'listening'
+                    : liveVoicePhase === 'speaking'
+                    ? 'speaking'
+                    : 'processing'
+                }
+                audioVolume={audioVolume}
+                size="md"
+                onClick={() => {
+                  finishLiveVoiceAndExecute();
+                }}
+              />
+            </div>
+
+            {/* Middle: Live State & Real-time Transcript */}
+            <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
+              <div className="flex items-center gap-2">
+                {liveVoicePhase === 'listening' && (
+                  <span className="text-xs font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#BC82F3] via-[#FF5DA2] to-[#0052FF]">
+                    Listening…
+                  </span>
+                )}
+                {liveVoicePhase === 'understanding' && (
+                  <span className="text-xs font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#BC82F3] via-[#7928CA] to-[#0052FF]">
+                    Understanding…
+                  </span>
+                )}
+                {liveVoicePhase === 'thinking' && (
+                  <span className="text-xs font-semibold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-[#FF7A00] via-[#F5B9EA] to-[#BC82F3]">
+                    Thinking…
+                  </span>
+                )}
               </div>
 
-              {filteredSlashCommands.map((cmd, idx) => (
-                <button
-                  key={cmd.id}
-                  type="button"
-                  onMouseEnter={() => setSelectedSlashIndex(idx)}
-                  onClick={() => handleSelectSlashCommand(cmd)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition-colors cursor-pointer text-xs h-9 ${
-                    selectedSlashIndex === idx
-                      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-950 dark:text-white font-medium'
-                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] text-zinc-900 dark:text-zinc-100 border border-black/[0.06] dark:border-white/[0.08] shrink-0">
-                      {cmd.command}
-                    </span>
-                    <span className="truncate text-zinc-800 dark:text-zinc-200">
-                      {cmd.label}
-                    </span>
-                  </div>
-
-                  <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
-                    {selectedSlashIndex === idx ? '↵' : ''}
-                  </span>
-                </button>
-              ))}
+              <div className="truncate">
+                {liveTranscript ? (
+                  <p className="text-sm font-medium text-zinc-900 tracking-tight truncate">
+                    “{liveTranscript}”
+                  </p>
+                ) : streamingText ? (
+                  <p className="text-xs sm:text-sm text-zinc-700 truncate">
+                    {streamingText}
+                  </p>
+                ) : (
+                  <p className="text-xs text-zinc-400 font-normal truncate">
+                    Say: &ldquo;Meeting with Rahul tomorrow 4 PM&rdquo;…
+                  </p>
+                )}
+              </div>
             </div>
-          )}
 
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              let fullInstruction = prompt.trim();
-              if (activeSlashCommand) {
-                if (fullInstruction) {
-                  fullInstruction = `${activeSlashCommand.command} ${fullInstruction}`;
-                } else if (activeSlashCommand.defaultPrompt) {
-                  fullInstruction = activeSlashCommand.defaultPrompt;
-                } else {
-                  fullInstruction = activeSlashCommand.command;
-                }
-                setActiveSlashCommand(null);
-              }
-              if (fullInstruction) {
-                setPrompt('');
-                handleExecuteInstruction(fullInstruction);
-              }
-            }}
-            className="flex flex-col gap-2.5"
-          >
-            {/* Active Slash Command Highlight (ChatGPT Style, Blue Pill) */}
-            {activeSlashCommand && (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 text-[#0052FF] dark:text-blue-400 font-mono text-xs font-semibold select-none border border-blue-500/25 shrink-0 w-fit">
-                <span>{activeSlashCommand.command}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveSlashCommand(null);
-                    inputRef.current?.focus();
-                  }}
-                  className="text-blue-500 hover:text-blue-700 dark:hover:text-blue-200 transition-colors ml-0.5 cursor-pointer"
-                  title="Remove command"
-                >
-                  <X className="w-3 h-3 stroke-[2.5]" />
-                </button>
+            {/* Right: Voice Controls */}
+            <div className="flex items-center gap-1.5 shrink-0 pr-0.5">
+              <button
+                type="button"
+                onClick={() => {
+                  stopMicrophoneStream();
+                  setIsLiveVoiceOpen(false);
+                  setVoiceState('idle');
+                }}
+                title="Cancel voice (Esc)"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-800 hover:bg-black/[0.04] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={finishLiveVoiceAndExecute}
+                title="Submit voice (Enter)"
+                className="px-3.5 py-1.5 rounded-full bg-zinc-900 hover:bg-black text-white text-xs font-semibold shadow-xs active:scale-95 transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Send</span>
+                <Send className="w-3.5 h-3.5 -rotate-12 translate-x-[-0.5px]" />
+              </button>
+            </div>
+          </div>
+
+        ) : (
+          /* Standard Hero Composer Input Form */
+          <div className="relative">
+            {/* Floating Slash Command Menu (Opens BELOW input box, clean monochrome black & white, no icons) */}
+            {prompt.startsWith('/') && !isProcessing && filteredSlashCommands.length > 0 && (
+              <div
+                ref={slashMenuRef}
+                className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl bg-white dark:bg-[#18181b] backdrop-blur-2xl border border-black/10 dark:border-white/10 shadow-[0_16px_40px_rgba(0,0,0,0.14)] dark:shadow-[0_16px_40px_rgba(0,0,0,0.6)] p-1.5 space-y-0.5 animate-in fade-in zoom-in-95 duration-150 max-h-72 overflow-y-auto select-none"
+              >
+                <div className="px-2.5 py-1.5 flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-zinc-400 dark:text-zinc-500 border-b border-black/[0.05] dark:border-white/[0.06] mb-1">
+                  <span>Commands</span>
+                  <span>↑↓ navigate · ↵ select</span>
+                </div>
+
+                {filteredSlashCommands.map((cmd, idx) => (
+                  <button
+                    key={cmd.id}
+                    type="button"
+                    onMouseEnter={() => setSelectedSlashIndex(idx)}
+                    onClick={() => handleSelectSlashCommand(cmd)}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors cursor-pointer text-xs h-9 ${
+                      selectedSlashIndex === idx
+                        ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-950 dark:text-white font-medium'
+                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] text-zinc-900 dark:text-zinc-100 border border-black/[0.06] dark:border-white/[0.08] shrink-0">
+                        {cmd.command}
+                      </span>
+                      <span className="truncate text-zinc-800 dark:text-zinc-200">
+                        {cmd.label}
+                      </span>
+                    </div>
+
+                    <span className="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 shrink-0">
+                      {selectedSlashIndex === idx ? '↵' : ''}
+                    </span>
+                  </button>
+                ))}
               </div>
             )}
 
-            {/* Spacious, Comfortable Multi-Line Textarea */}
-            <textarea
-              ref={inputRef}
-              rows={2}
-              value={prompt}
-              onChange={handleInputChange}
-              onKeyDown={handleInputKeyDown}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => {
-                setIsFocused(false);
-                setIsTyping(false);
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                let fullInstruction = prompt.trim();
+                if (activeSlashCommand) {
+                  if (fullInstruction) {
+                    fullInstruction = `${activeSlashCommand.command} ${fullInstruction}`;
+                  } else if (activeSlashCommand.defaultPrompt) {
+                    fullInstruction = activeSlashCommand.defaultPrompt;
+                  } else {
+                    fullInstruction = activeSlashCommand.command;
+                  }
+                  setActiveSlashCommand(null);
+                }
+                if (fullInstruction) {
+                  setPrompt('');
+                  handleExecuteInstruction(fullInstruction);
+                }
               }}
-              disabled={isProcessing}
-              placeholder={
-                activeSlashCommand
-                  ? activeSlashCommand.placeholder || 'Type instructions or press Enter…'
-                  : 'Ask Recall anything, plan your schedule, or type / for commands… (Enter to send, Shift+Enter for newline)'
-              }
-              className="w-full bg-transparent text-sm sm:text-base !text-zinc-900 dark:!text-[#ececec] placeholder:!text-zinc-400 dark:placeholder:!text-zinc-500 outline-none border-none tracking-tight font-normal resize-none min-h-[48px] max-h-[140px] leading-relaxed p-0.5"
-            />
-
-            {/* Bottom Action Controls: [+] Attachment menu on left, Send button on right */}
-            <div className="flex items-center justify-between pt-1 border-t border-black/[0.04] dark:border-white/[0.06]">
-              {/* Left: Attachment + Quick action hints */}
-              <div className="flex items-center gap-2">
-                {/* Hidden upload input */}
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleFileChange}
-                  className="hidden"
-                  accept="*/*"
+              className="flex items-center gap-2 sm:gap-2.5"
+            >
+              {/* Recall Voice Orb */}
+              <div className="relative shrink-0 flex items-center pl-0.5">
+                <VoiceOrb
+                  state={orbCurrentState}
+                  audioVolume={audioVolume}
+                  size="md"
+                  onClick={handleToggleVoice}
                 />
-
-                {/* + Attachment Menu */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowAttachmentMenu(!showAttachmentMenu);
-                    }}
-                    title="Attach photo, document, add task, or link apps"
-                    className="h-8 px-2.5 rounded-xl flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors cursor-pointer text-xs font-medium"
-                  >
-                    <Plus className="w-4 h-4 stroke-[2]" />
-                    <span>Attach</span>
-                  </button>
-
-                  {showAttachmentMenu && (
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      className="absolute left-0 bottom-full mb-2 z-50 w-56 sm:w-60 p-2 rounded-2xl bg-white dark:bg-[#1f1f23] border border-black/[0.08] dark:border-white/[0.1] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.18)] space-y-1 animate-in fade-in zoom-in-95 duration-150"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAttachmentMenu(false);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.accept = 'image/*';
-                            fileInputRef.current.click();
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
-                      >
-                        <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-blue-50 dark:bg-blue-950/50 text-blue-600 shrink-0">
-                          <ImageIcon className="w-4 h-4" />
-                        </div>
-                        <span>Photo / Screenshot</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAttachmentMenu(false);
-                          if (fileInputRef.current) {
-                            fileInputRef.current.accept = '.pdf,.doc,.docx,.txt';
-                            fileInputRef.current.click();
-                          }
-                        }}
-                        className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
-                      >
-                        <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-purple-50 dark:bg-purple-950/50 text-purple-600 shrink-0">
-                          <FileText className="w-4 h-4" />
-                        </div>
-                        <span>PDF or File</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAttachmentMenu(false);
-                          onOpenTaskComposer?.();
-                        }}
-                        className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
-                      >
-                        <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 shrink-0">
-                          <CheckSquare className="w-4 h-4" />
-                        </div>
-                        <span>Add Task</span>
-                      </button>
-                      <div className="border-t border-black/[0.05] dark:border-white/[0.06] my-1" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowAttachmentMenu(false);
-                          onConnectorPulse?.('drive');
-                        }}
-                        className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
-                      >
-                        <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-emerald-50/80 border border-emerald-100/50 shrink-0">
-                          <PluginIcon id="drive" size={18} />
-                        </div>
-                        <span>Google Drive</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Suggestion / Shortcut Chip */}
-                <span className="hidden sm:inline-flex items-center gap-1 text-[11px] text-zinc-400 dark:text-zinc-500 font-mono">
-                  <span className="px-1.5 py-0.5 rounded bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.05] dark:border-white/[0.06]">/</span> for commands
-                </span>
               </div>
 
-              {/* Right: Big Crisp Send Button */}
-              <button
-                type="submit"
-                disabled={(!prompt.trim() && !attachedFile) || isProcessing}
-                title="Send instructions"
-                className="h-9 px-4 rounded-xl bg-zinc-900 hover:bg-black dark:bg-[#ececec] dark:hover:bg-white text-white dark:text-[#171717] font-semibold text-xs transition-all disabled:opacity-20 disabled:pointer-events-none cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-2xs"
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <>
-                    <span>Send</span>
-                    <Send className="w-3.5 h-3.5" />
-                  </>
+              {/* Active Slash Command Highlight (ChatGPT Style, Blue Pill) */}
+              {activeSlashCommand && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/10 dark:bg-blue-500/20 text-[#0052FF] dark:text-blue-400 font-mono text-xs font-semibold select-none border border-blue-500/25 shrink-0 animate-in fade-in zoom-in-95 duration-100">
+                  <span>{activeSlashCommand.command}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveSlashCommand(null);
+                      inputRef.current?.focus();
+                    }}
+                    className="text-blue-500 hover:text-blue-700 dark:hover:text-blue-200 transition-colors ml-0.5 cursor-pointer"
+                    title="Remove command"
+                  >
+                    <X className="w-3 h-3 stroke-[2.5]" />
+                  </button>
+                </div>
+              )}
+
+              {/* Natural prompt input */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={prompt}
+                onChange={handleInputChange}
+                onKeyDown={handleInputKeyDown}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => {
+                  setIsFocused(false);
+                  setIsTyping(false);
+                }}
+                disabled={isProcessing}
+                placeholder={
+                  activeSlashCommand
+                    ? activeSlashCommand.placeholder || 'Type instructions or press Enter…'
+                    : 'Ask Recall anything, speak, or type / for commands…'
+                }
+                style={{ color: 'var(--input-text)', WebkitTextFillColor: 'var(--input-text)', caretColor: '#0052FF' }}
+                className="flex-1 bg-transparent text-sm sm:text-[15px] !text-zinc-900 dark:!text-[#ececec] placeholder:!text-zinc-400 dark:placeholder:!text-zinc-500 outline-none border-none tracking-tight font-normal"
+              />
+
+            {/* Right Action Icons: ONLY [+] and [mic / send] */}
+            <div className="flex items-center gap-1.5 shrink-0 pr-0.5">
+              {/* Hidden upload input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                className="hidden"
+                accept="*/*"
+              />
+
+              {/* + Attachment Menu Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAttachmentMenu(!showAttachmentMenu);
+                  }}
+                  title="Attach file, add task, or connect apps"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 stroke-[2]" />
+                </button>
+
+                {showAttachmentMenu && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-full mt-2.5 z-50 w-56 sm:w-60 p-2 rounded-[22px] bg-white dark:bg-[#1f1f23] border border-black/[0.08] dark:border-white/[0.1] shadow-[0_20px_50px_-10px_rgba(0,0,0,0.16)] space-y-1 animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachmentMenu(false);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = 'image/*';
+                          fileInputRef.current.click();
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs sm:text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
+                    >
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-blue-50 dark:bg-blue-950/50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
+                        <ImageIcon className="w-[18px] h-[18px]" />
+                      </div>
+                      <span>Photo / Screenshot</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachmentMenu(false);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.accept = '.pdf,.doc,.docx,.txt';
+                          fileInputRef.current.click();
+                        }
+                      }}
+                      className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs sm:text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
+                    >
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-purple-50 dark:bg-purple-950/50 text-purple-600 shrink-0 group-hover:scale-105 transition-transform">
+                        <FileText className="w-[18px] h-[18px]" />
+                      </div>
+                      <span>PDF or File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachmentMenu(false);
+                        onOpenTaskComposer?.();
+                      }}
+                      className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs sm:text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
+                    >
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 shrink-0 group-hover:scale-105 transition-transform">
+                        <CheckSquare className="w-[18px] h-[18px]" />
+                      </div>
+                      <span>Add task</span>
+                    </button>
+
+                    <div className="border-t border-black/[0.05] dark:border-white/[0.06] my-1" />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachmentMenu(false);
+                        onConnectorPulse?.('drive');
+                      }}
+                      className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs sm:text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
+                    >
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-emerald-50/80 border border-emerald-100/50 shrink-0 group-hover:scale-105 transition-transform">
+                        <PluginIcon id="drive" size={20} />
+                      </div>
+                      <span>Google Drive</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAttachmentMenu(false);
+                        onConnectorPulse?.('notion');
+                      }}
+                      className="w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-left text-xs sm:text-[13px] font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-zinc-950 dark:hover:text-white transition-colors cursor-pointer group"
+                    >
+                      <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-zinc-100 dark:bg-zinc-800 border border-black/[0.04] dark:border-white/[0.06] shrink-0 group-hover:scale-105 transition-transform">
+                        <PluginIcon id="notion" size={20} />
+                      </div>
+                      <span>Notion</span>
+                    </button>
+                  </div>
                 )}
-              </button>
+              </div>
+
+              {/* Dynamic Mic or Send Button */}
+              {!prompt.trim() && !attachedFile ? (
+                <button
+                  type="button"
+                  onClick={startVoiceCapture}
+                  title="Voice mode"
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={isProcessing}
+                  title="Send"
+                  className="w-9 h-9 rounded-full flex items-center justify-center bg-zinc-900 hover:bg-black dark:bg-[#ececec] dark:hover:bg-white text-white dark:text-[#171717] shadow-2xs active:scale-95 cursor-pointer transition-all"
+                >
+                  <Send className="w-3.5 h-3.5 -rotate-12 translate-x-[-0.5px]" />
+                </button>
+              )}
             </div>
           </form>
-        </div>
+          </div>
+        )}
       </div>
 
       <PlanningProgressCard state={planningMachine} />
