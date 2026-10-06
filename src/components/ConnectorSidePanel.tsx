@@ -974,64 +974,111 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
           {/* ==================== 4. WHATSAPP ==================== */}
           {activeId === 'whatsapp' && (
             <div className="space-y-4">
-              {/* Clean Disabled Card */}
+              {/* WhatsApp Active Card */}
               <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-black/[0.06] dark:border-white/[0.08] space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-zinc-400" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      WhatsApp Connector
+                      WhatsApp Notifications
                     </span>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-zinc-200/80 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-semibold">
-                    Currently Disabled
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
+                    Active
                   </span>
                 </div>
 
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  WhatsApp reminders and cloud notifications are currently disabled in this local environment.
+                  Send real-time task alerts and meeting reminders straight to WhatsApp via Meta Cloud API.
                 </p>
 
                 <div className="pt-2 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between text-[11px] text-zinc-500">
-                  <span>Status</span>
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">Disabled (Local Session)</span>
+                  <span>Target Recipient</span>
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+                    {whatsAppRecipient || '+91 9622121100'}
+                  </span>
                 </div>
               </div>
 
-              {/* Informative Guidance */}
-              <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-100/80 dark:border-blue-900/40 text-xs text-blue-950 dark:text-blue-200 space-y-1.5">
-                <div className="font-semibold text-xs flex items-center gap-1.5 text-blue-900 dark:text-blue-200">
-                  <Check className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Other Features Active & Smooth</span>
+              {isTokenExpired && (
+                <div className="p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
+                  <div className="font-semibold flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>Meta Access Token Notice</span>
+                  </div>
+                  <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80 leading-relaxed font-normal">
+                    The 24-hour temporary token in your Meta App Dashboard has expired. Generate a refreshed token in Meta Developer Portal and paste it below.
+                  </p>
                 </div>
-                <p className="text-[11px] text-blue-800/80 dark:text-blue-300/80 leading-relaxed">
-                  Google Calendar, Recall Flow speech engine, day schedule planning, and in-app reminders are active and running without needing any external WhatsApp configuration.
-                </p>
+              )}
+
+              {/* Token Update Input Section */}
+              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-black/[0.05] dark:border-white/[0.08] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Meta Access Token</span>
+                  <a
+                    href="https://developers.facebook.com/apps/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    <span>Meta Developer Portal</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    placeholder="Paste refreshed token (EAAUY...)"
+                    value={whatsAppTokenInput}
+                    onChange={(e) => setWhatsAppTokenInput(e.target.value)}
+                    className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-black/[0.08] dark:border-white/[0.1] text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-zinc-800"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveWhatsAppToken}
+                    disabled={isUpdatingToken || !whatsAppTokenInput.trim()}
+                    className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-medium cursor-pointer disabled:opacity-40 transition-colors shrink-0"
+                  >
+                    {isUpdatingToken ? 'Verifying…' : 'Update'}
+                  </button>
+                </div>
+                {tokenUpdateFeedback && (
+                  <div
+                    className={`text-[11px] font-medium ${
+                      tokenUpdateFeedback.startsWith('✓') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {tokenUpdateFeedback}
+                  </div>
+                )}
               </div>
 
-              {/* Quick Actions into active features */}
-              <div className="pt-1 flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveId('calendar');
-                  }}
-                  className="px-3.5 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-medium border border-black/[0.04] transition-all cursor-pointer flex items-center gap-1.5"
+              {whatsAppTestStatus && (
+                <div
+                  className={`p-3 rounded-xl text-xs font-medium ${
+                    whatsAppTestStatus.startsWith('✓')
+                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                      : 'bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-800'
+                  }`}
                 >
-                  <CalendarIcon className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Open Calendar</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onAskRecall?.('Plan my day around meetings and work');
-                    onClose();
-                  }}
-                  className="px-3.5 py-1.5 rounded-full bg-zinc-100 hover:bg-zinc-200/80 text-zinc-800 text-xs font-medium border border-black/[0.04] transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <span>Plan my day</span>
-                </button>
-              </div>
+                  {whatsAppTestStatus}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleTestWhatsApp}
+                disabled={isTestingWhatsApp}
+                className="w-full py-2.5 rounded-2xl bg-zinc-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+              >
+                {isTestingWhatsApp ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <MessageCircle className="w-3.5 h-3.5" />
+                )}
+                <span>Send Test WhatsApp Ping</span>
+              </button>
             </div>
           )}
 

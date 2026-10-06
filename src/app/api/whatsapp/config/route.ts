@@ -95,7 +95,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (recipient && typeof recipient === 'string') {
-      const cleanRecipient = recipient.replace(/\D/g, '');
+      let cleanRecipient = recipient.replace(/\D/g, '');
+      if (cleanRecipient.length === 10) {
+        cleanRecipient = '91' + cleanRecipient;
+      }
       process.env.META_WHATSAPP_RECIPIENT = cleanRecipient;
       process.env.WHATSAPP_RECIPIENT_PHONE_NUMBER = cleanRecipient;
 

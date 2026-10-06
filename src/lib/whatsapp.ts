@@ -3,12 +3,14 @@ export interface SendWhatsAppTextOptions {
   dueText?: string;
   note?: string | null;
   allowFallbackTemplate?: boolean;
+  recipient?: string;
 }
 
 export interface SendWhatsAppResult {
   success: boolean;
   messageId?: string;
   mode?: 'text' | 'template_fallback';
+  recipient?: string;
   error?: string;
   metaRawError?: any;
 }
@@ -34,7 +36,9 @@ export async function sendWhatsAppText(
   const phoneNumberId =
     process.env.META_WHATSAPP_PHONE_NUMBER_ID || process.env.WHATSAPP_PHONE_NUMBER_ID;
   const recipient =
-    process.env.META_WHATSAPP_RECIPIENT || process.env.WHATSAPP_RECIPIENT_PHONE_NUMBER;
+    options.recipient ||
+    process.env.META_WHATSAPP_RECIPIENT ||
+    process.env.WHATSAPP_RECIPIENT_PHONE_NUMBER;
   const graphVersion = process.env.META_GRAPH_VERSION || 'v25.0';
 
   if (!token || token.trim() === '' || token.includes('PASTE_NEW_TOKEN_HERE')) {
@@ -54,11 +58,14 @@ export async function sendWhatsAppText(
   if (!recipient) {
     return {
       success: false,
-      error: 'META_WHATSAPP_RECIPIENT is not configured in .env.local',
+      error: 'META_WHATSAPP_RECIPIENT is not configured',
     };
   }
 
-  const cleanRecipient = recipient.replace(/\D/g, '');
+  let cleanRecipient = recipient.replace(/\D/g, '');
+  if (cleanRecipient.length === 10) {
+    cleanRecipient = '91' + cleanRecipient;
+  }
   const url = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}/messages`;
 
   const dueLabel = options.dueText ? `Due: ${options.dueText}` : 'Due now';
@@ -97,6 +104,7 @@ export async function sendWhatsAppText(
         success: true,
         mode: 'text',
         messageId: data.messages[0].id,
+        recipient: cleanRecipient,
       };
     }
 
@@ -138,6 +146,7 @@ export async function sendWhatsAppText(
           success: true,
           mode: 'template_fallback',
           messageId: templateData.messages[0].id,
+          recipient: cleanRecipient,
         };
       }
     }
