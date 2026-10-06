@@ -6,6 +6,11 @@ import {
   deleteLocalTask,
   ensureLocalSchedulerStarted,
 } from '@/lib/local-store';
+import {
+  isMacOS,
+  createAppleReminder,
+  createAppleCalendarEvent,
+} from '@/lib/apple-notifications';
 
 // Start the local background scheduler on the very first API request
 ensureLocalSchedulerStarted();
@@ -71,6 +76,25 @@ export async function POST(req: NextRequest) {
       projectId,
       project_name,
     });
+
+    // Auto-sync to Apple Ecosystem on macOS (syncs to iPhone & Apple Watch via iCloud)
+    if (isMacOS()) {
+      if (newTask.is_meeting) {
+        createAppleCalendarEvent({
+          title: newTask.title,
+          startAt: newTask.due_at,
+          endAt: newTask.end_time || null,
+          location: newTask.location || null,
+          notes: newTask.note || null,
+        }).catch((e) => console.warn('[Tasks API] Apple Calendar sync notice:', e));
+      } else {
+        createAppleReminder({
+          title: newTask.title,
+          dueAt: newTask.due_at,
+          notes: newTask.note || null,
+        }).catch((e) => console.warn('[Tasks API] Apple Reminders sync notice:', e));
+      }
+    }
 
     return NextResponse.json({
       configured: true,

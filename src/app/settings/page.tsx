@@ -1599,6 +1599,45 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
+                {/* Apple Ecosystem (Mac & iPhone) */}
+                <div className="p-4 sm:p-5 flex items-center justify-between gap-4 bg-zinc-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-black text-white flex items-center justify-center shrink-0">
+                      <PluginIcon id="apple" size={18} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                        <span>Apple Ecosystem Sync</span>
+                        <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                          Active (Mac & iPhone)
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        Syncs reminders to Apple Reminders & Calendar via iCloud. Alerts chime on iPhone & Apple Watch.
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await fetch('/api/apple', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            action: 'test',
+                            title: 'Apple Ecosystem Test',
+                            message: 'Notifications active on your Mac and iPhone!',
+                          }),
+                        });
+                      } catch {}
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-semibold cursor-pointer shadow-2xs transition-all shrink-0"
+                  >
+                    Test Alert
+                  </button>
+                </div>
+
                 <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">

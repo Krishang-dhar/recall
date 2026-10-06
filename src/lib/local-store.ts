@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Task, Conversation, Message, Project, Attachment, AssistantType } from './types';
 import { sendWhatsAppText } from './whatsapp';
+import { dispatchAppleNotification } from './apple-notifications';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const TASKS_FILE = path.join(DATA_DIR, 'tasks.json');
@@ -398,6 +399,14 @@ export async function checkAndDispatchDueReminders(): Promise<{
         note: task.note,
         allowFallbackTemplate: false,
       });
+
+      // Dispatch to Apple ecosystem (macOS banner + iPhone/Watch Reminders + Bark push)
+      dispatchAppleNotification({
+        title: task.title,
+        body: task.note ? `${task.note} — Due now` : 'Your Recall reminder is due now.',
+        dueAt: task.due_at,
+        isUrgent: task.priority === 'high' || task.priority === 'urgent',
+      }).catch((e) => console.warn('[Local Scheduler] Apple dispatch notice:', e));
 
       if (sendResult.success) {
         // Mark whatsapp_sent true on the persistent local store
