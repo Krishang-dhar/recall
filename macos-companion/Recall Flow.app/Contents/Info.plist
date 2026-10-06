@@ -22,5 +22,9 @@
     <string>Recall Flow uses speech recognition to convert your speech to text.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Recall Flow uses Apple Events to type text into your active applications.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Recall uses Apple Calendar to schedule meetings and check your availability.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Recall uses Apple Reminders to sync tasks across your Apple devices via iCloud.</string>
 </dict>
 </plist>

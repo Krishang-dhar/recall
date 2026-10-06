@@ -7,6 +7,9 @@ cd "$DIR"
 echo "🔨 Building Recall Flow native macOS companion..."
 swiftc -O RecallFlowCompanion.swift -o recall-flow-mac
 
+echo "🔨 Building Recall native Apple EventKit/UserNotifications bridge..."
+swiftc -O RecallAppleBridge.swift -o recall-apple-bridge
+
 echo "📦 Packaging Recall Flow.app bundle with macOS permissions and icon..."
 mkdir -p "Recall Flow.app/Contents/MacOS"
 mkdir -p "Recall Flow.app/Contents/Resources"
@@ -55,11 +58,16 @@ cat << 'EOF' > "Recall Flow.app/Contents/Info.plist"
     <string>Recall Flow uses speech recognition to convert your speech to text.</string>
     <key>NSAppleEventsUsageDescription</key>
     <string>Recall Flow uses Apple Events to type text into your active applications.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Recall uses Apple Calendar to schedule meetings and check your availability.</string>
+    <key>NSRemindersUsageDescription</key>
+    <string>Recall uses Apple Reminders to sync tasks across your Apple devices via iCloud.</string>
 </dict>
 </plist>
 EOF
 
 cp recall-flow-mac "Recall Flow.app/Contents/MacOS/recall-flow-mac"
+cp recall-apple-bridge "Recall Flow.app/Contents/MacOS/recall-apple-bridge"
 codesign --force --deep --sign - "Recall Flow.app"
 
 echo "✅ Successfully built: $DIR/Recall Flow.app"

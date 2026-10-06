@@ -1,12 +1,18 @@
-import { exec } from 'child_process';
+import { execFile, exec } from 'child_process';
 import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs';
 
+const execFileAsync = promisify(execFile);
 const execAsync = promisify(exec);
+
+const BRIDGE_PATH = path.join(process.cwd(), 'macos-companion', 'recall-apple-bridge');
 
 export interface AppleReminderOptions {
   title: string;
   dueAt?: string | Date | null;
   notes?: string | null;
+  priority?: number;
 }
 
 export interface AppleCalendarOptions {
@@ -25,15 +31,103 @@ export interface BarkPushOptions {
   isUrgent?: boolean;
 }
 
-/**
- * Checks if the server environment is running on macOS.
- */
+export interface ApplePermissionStatus {
+  calendar: 'authorized' | 'writeOnly' | 'denied' | 'restricted' | 'notDetermined' | 'unavailable';
+  reminders: 'authorized' | 'denied' | 'restricted' | 'notDetermined' | 'unavailable';
+  notifications: 'authorized' | 'denied' | 'notDetermined' | 'unavailable';
+  isConnected: boolean;
+}
+
 export function isMacOS(): boolean {
   return process.platform === 'darwin';
 }
 
+function hasBridge(): boolean {
+  return isMacOS() && fs.existsSync(BRIDGE_PATH);
+}
+
+/**
+ * Executes a command on the native Swift Apple EventKit/UserNotifications bridge.
+ */
+async function callBridge<T>(command: string, args: string[] = []): Promise<{ success: boolean; data?: T; error?: string }> {
+  if (!hasBridge()) {
+    return { success: false, error: 'Recall Apple native bridge binary is not available' };
+  }
+
+  try {
+    const { stdout } = await execFileAsync(BRIDGE_PATH, [command, ...args]);
+    const parsed = JSON.parse(stdout);
+    return parsed;
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Bridge execution failed' };
+  }
+}
+
+/**
+ * Returns real Apple EventKit and UserNotifications authorization status.
+ */
+export async function getApplePermissionStatus(): Promise<ApplePermissionStatus> {
+  if (!isMacOS()) {
+    return {
+      calendar: 'unavailable',
+      reminders: 'unavailable',
+      notifications: 'unavailable',
+      isConnected: false,
+    };
+  }
+
+  const res = await callBridge<{
+    calendar: string;
+    reminders: string;
+    notifications: string;
+    isConnected: boolean;
+  }>('status');
+
+  if (res.success && res.data) {
+    return {
+      calendar: res.data.calendar as any,
+      reminders: res.data.reminders as any,
+      notifications: res.data.notifications as any,
+      isConnected: res.data.isConnected,
+    };
+  }
+
+  return {
+    calendar: 'notDetermined',
+    reminders: 'notDetermined',
+    notifications: 'notDetermined',
+    isConnected: false,
+  };
+}
+
+/**
+ * Requests native macOS permissions for Calendar, Reminders, and Notifications.
+ */
+export async function requestApplePermissions(): Promise<ApplePermissionStatus> {
+  if (!isMacOS()) return getApplePermissionStatus();
+
+  const res = await callBridge<{
+    calendar: string;
+    reminders: string;
+    notifications: string;
+    isConnected: boolean;
+  }>('request-permissions');
+
+  if (res.success && res.data) {
+    return {
+      calendar: res.data.calendar as any,
+      reminders: res.data.reminders as any,
+      notifications: res.data.notifications as any,
+      isConnected: res.data.isConnected,
+    };
+  }
+
+  return getApplePermissionStatus();
+}
+
 /**
  * Display a native macOS Notification Center banner with sound.
+ * Uses native UserNotifications/AppKit via Swift bridge, falling back to AppleScript.
  */
 export async function showMacOSNotification(
   title: string,
@@ -42,6 +136,13 @@ export async function showMacOSNotification(
 ): Promise<boolean> {
   if (!isMacOS()) return false;
 
+  // 1. Try Native Swift Bridge
+  if (hasBridge()) {
+    const res = await callBridge<{ notified: boolean }>('notify', [title, message, sound]);
+    if (res.success) return true;
+  }
+
+  // 2. Compatibility Fallback via AppleScript
   try {
     const cleanTitle = title.replace(/"/g, '\\"').replace(/'/g, "\\'");
     const cleanMsg = message.replace(/"/g, '\\"').replace(/'/g, "\\'");
@@ -58,9 +159,8 @@ export async function showMacOSNotification(
 }
 
 /**
- * Creates a reminder in Apple's native Reminders.app on macOS.
- * When iCloud is enabled on the Mac, this immediately syncs to the user's
- * iPhone, Apple Watch, and iPad with native lock screen banners and sound.
+ * Creates a reminder in Apple's native Reminders using EventKit.
+ * When iCloud is enabled on the Mac, this immediately syncs to iPhone & Apple Watch.
  */
 export async function createAppleReminder(
   options: AppleReminderOptions
@@ -69,9 +169,28 @@ export async function createAppleReminder(
     return { success: false, error: 'Apple Reminders is only supported on macOS' };
   }
 
+  const isoDue = options.dueAt ? new Date(options.dueAt).toISOString() : '';
+  const notes = options.notes || '';
+  const priority = String(options.priority || 0);
+
+  // 1. Try Native EventKit Swift Bridge
+  if (hasBridge()) {
+    const res = await callBridge<{ reminderId: string }>('reminders-create', [
+      options.title,
+      isoDue,
+      notes,
+      priority,
+    ]);
+    if (res.success && res.data?.reminderId) {
+      console.log(`[EventKit Native] Reminder created: ${res.data.reminderId}`);
+      return { success: true, reminderId: res.data.reminderId };
+    }
+  }
+
+  // 2. Compatibility Fallback via AppleScript
   try {
     const cleanTitle = options.title.replace(/"/g, '\\"').replace(/'/g, "\\'");
-    const cleanBody = (options.notes || '').replace(/"/g, '\\"').replace(/'/g, "\\'");
+    const cleanBody = notes.replace(/"/g, '\\"').replace(/'/g, "\\'");
 
     let dateScript = '';
     if (options.dueAt) {
@@ -101,23 +220,56 @@ export async function createAppleReminder(
 
     const { stdout } = await execAsync(`osascript -e '${script}'`);
     const reminderId = stdout.trim();
-    console.log(`[Apple Notifications] Apple Reminder created (syncs to iPhone): ${reminderId}`);
-
-    return {
-      success: true,
-      reminderId,
-    };
+    return { success: true, reminderId };
   } catch (err: any) {
-    console.warn('[Apple Notifications] Error creating Apple Reminder:', err.message);
-    return {
-      success: false,
-      error: err.message,
-    };
+    return { success: false, error: err.message };
   }
 }
 
 /**
- * Creates an event in Apple's native Calendar.app on macOS.
+ * Completes an Apple Reminder by ID using EventKit.
+ */
+export async function completeAppleReminder(
+  reminderId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isMacOS()) return { success: false, error: 'macOS only' };
+
+  if (hasBridge()) {
+    const res = await callBridge('reminders-complete', [reminderId]);
+    if (res.success) return { success: true };
+  }
+
+  try {
+    await execAsync(`osascript -e 'tell application "Reminders" to set completed of (first reminder whose id is "${reminderId}") to true'`);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Deletes an Apple Reminder by ID using EventKit.
+ */
+export async function deleteAppleReminder(
+  reminderId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isMacOS()) return { success: false, error: 'macOS only' };
+
+  if (hasBridge()) {
+    const res = await callBridge('reminders-delete', [reminderId]);
+    if (res.success) return { success: true };
+  }
+
+  try {
+    await execAsync(`osascript -e 'tell application "Reminders" to delete (first reminder whose id is "${reminderId}")'`);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Creates an event in Apple's native Calendar using EventKit.
  * Syncs automatically across iPhone, Apple Watch, and Mac via iCloud.
  */
 export async function createAppleCalendarEvent(
@@ -127,13 +279,31 @@ export async function createAppleCalendarEvent(
     return { success: false, error: 'Apple Calendar is only supported on macOS' };
   }
 
+  const start = new Date(options.startAt);
+  const end = options.endAt ? new Date(options.endAt) : new Date(start.getTime() + 30 * 60 * 1000);
+  const loc = options.location || '';
+  const notes = options.notes || '';
+
+  // 1. Try Native EventKit Swift Bridge
+  if (hasBridge()) {
+    const res = await callBridge<{ eventId: string }>('calendar-create', [
+      options.title,
+      start.toISOString(),
+      end.toISOString(),
+      loc,
+      notes,
+    ]);
+    if (res.success && res.data?.eventId) {
+      console.log(`[EventKit Native] Calendar event created: ${res.data.eventId}`);
+      return { success: true, eventId: res.data.eventId };
+    }
+  }
+
+  // 2. Compatibility Fallback via AppleScript
   try {
     const cleanTitle = options.title.replace(/"/g, '\\"').replace(/'/g, "\\'");
-    const cleanNotes = (options.notes || '').replace(/"/g, '\\"').replace(/'/g, "\\'");
-    const cleanLoc = (options.location || '').replace(/"/g, '\\"').replace(/'/g, "\\'");
-
-    const start = new Date(options.startAt);
-    const end = options.endAt ? new Date(options.endAt) : new Date(start.getTime() + 30 * 60 * 1000);
+    const cleanNotes = notes.replace(/"/g, '\\"').replace(/'/g, "\\'");
+    const cleanLoc = loc.replace(/"/g, '\\"').replace(/'/g, "\\'");
 
     const script = `
       tell application "Calendar"
@@ -163,24 +333,35 @@ export async function createAppleCalendarEvent(
 
     const { stdout } = await execAsync(`osascript -e '${script}'`);
     const eventId = stdout.trim();
-    console.log(`[Apple Notifications] Apple Calendar event created (syncs to iPhone): ${eventId}`);
-
-    return {
-      success: true,
-      eventId,
-    };
+    return { success: true, eventId };
   } catch (err: any) {
-    console.warn('[Apple Notifications] Error creating Apple Calendar event:', err.message);
-    return {
-      success: false,
-      error: err.message,
-    };
+    return { success: false, error: err.message };
   }
 }
 
 /**
- * Sends an instant push notification to iPhone and Apple Watch via Bark (iOS app).
- * Bark is a free, open-source push client for Apple devices.
+ * Deletes an Apple Calendar event by ID using EventKit.
+ */
+export async function deleteAppleCalendarEvent(
+  eventId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isMacOS()) return { success: false, error: 'macOS only' };
+
+  if (hasBridge()) {
+    const res = await callBridge('calendar-delete', [eventId]);
+    if (res.success) return { success: true };
+  }
+
+  try {
+    await execAsync(`osascript -e 'tell application "Calendar" to tell first calendar to delete (first event whose id is "${eventId}")'`);
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Sends an instant push notification to iPhone and Apple Watch via Bark.
  */
 export async function sendBarkPush(
   options: BarkPushOptions
@@ -208,22 +389,16 @@ export async function sendBarkPush(
 
     const data = await res.json();
     if (res.ok && data.code === 200) {
-      console.log(`[Apple Notifications] Bark iOS push delivered to iPhone: "${options.title}"`);
       return { success: true };
     }
-
     return { success: false, error: data.message || 'Bark rejected request' };
   } catch (err: any) {
-    console.warn('[Apple Notifications] Failed to send Bark push to iPhone:', err.message);
     return { success: false, error: err.message };
   }
 }
 
 /**
  * Master dispatcher for Apple Devices (Mac, iPhone, Apple Watch).
- * 1. Shows native macOS Notification Center banner with sound.
- * 2. Creates/syncs native Apple Reminder (which rings on iPhone via iCloud).
- * 3. Sends Bark push to iPhone & Apple Watch if Bark key is configured.
  */
 export async function dispatchAppleNotification(options: {
   title: string;
@@ -241,7 +416,6 @@ export async function dispatchAppleNotification(options: {
     barkPush: false,
   };
 
-  // 1. macOS Notification Center Banner
   try {
     results.macBanner = await showMacOSNotification(
       options.title,
@@ -250,17 +424,16 @@ export async function dispatchAppleNotification(options: {
     );
   } catch {}
 
-  // 2. Apple Reminders Sync (iPhone & Apple Watch)
   try {
     const remResult = await createAppleReminder({
       title: options.title,
       dueAt: options.dueAt,
       notes: options.body,
+      priority: options.isUrgent ? 1 : 0,
     });
     results.appleReminder = remResult.success;
   } catch {}
 
-  // 3. Bark iOS Instant Push
   try {
     const barkResult = await sendBarkPush({
       title: options.title,

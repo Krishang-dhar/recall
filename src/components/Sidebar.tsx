@@ -439,15 +439,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={() => {
                   window.dispatchEvent(
-                    new CustomEvent('open-connector-panel', { detail: { pluginId: 'calendar' } })
+                    new CustomEvent('open-connector-panel', { detail: { pluginId: 'apple' } })
                   );
                   if (window.innerWidth < 768) onToggle();
                 }}
                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left text-xs font-medium text-zinc-700 hover:text-zinc-950 hover:bg-black/[0.04] transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
-                  <PluginIcon id="calendar" size={16} />
-                  <span>Google Calendar</span>
+                  <PluginIcon id="apple" size={16} />
+                  <span>Apple Ecosystem</span>
+                </div>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('open-connector-panel', { detail: { pluginId: 'google' } })
+                  );
+                  if (window.innerWidth < 768) onToggle();
+                }}
+                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left text-xs font-medium text-zinc-700 hover:text-zinc-950 hover:bg-black/[0.04] transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2.5">
+                  <PluginIcon id="google" size={16} />
+                  <span>Google Workspace</span>
                 </div>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               </button>
@@ -466,41 +483,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <PluginIcon id="whatsapp" size={16} />
                   <span>WhatsApp</span>
                 </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.dispatchEvent(
-                    new CustomEvent('open-connector-panel', { detail: { pluginId: 'gmail' } })
-                  );
-                  if (window.innerWidth < 768) onToggle();
-                }}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left text-xs font-medium text-zinc-700 hover:text-zinc-950 hover:bg-black/[0.04] transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <PluginIcon id="gmail" size={16} />
-                  <span>Gmail</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  window.dispatchEvent(
-                    new CustomEvent('open-connector-panel', { detail: { pluginId: 'drive' } })
-                  );
-                  if (window.innerWidth < 768) onToggle();
-                }}
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-xl text-left text-xs font-medium text-zinc-700 hover:text-zinc-950 hover:bg-black/[0.04] transition-colors cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <PluginIcon id="drive" size={16} />
-                  <span>Google Drive</span>
-                </div>
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
               </button>
 
               <button

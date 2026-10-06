@@ -130,6 +130,75 @@ export default function SettingsPage() {
   const [googleEmail, setGoogleEmail] = useState<string | null>(null);
   const [isManagingGoogle, setIsManagingGoogle] = useState(false);
 
+  // Apple Connection
+  const [appleData, setAppleData] = useState<{
+    isMacOS: boolean;
+    permissions: {
+      calendar: string;
+      reminders: string;
+      notifications: string;
+      isConnected: boolean;
+    };
+  } | null>(null);
+  const [isManagingApple, setIsManagingApple] = useState(false);
+  const [isTestingApple, setIsTestingApple] = useState(false);
+  const [appleTestResult, setAppleTestResult] = useState<string | null>(null);
+  const [isRequestingApple, setIsRequestingApple] = useState(false);
+
+  const handleRequestApplePermissions = async () => {
+    setIsRequestingApple(true);
+    try {
+      const res = await fetch('/api/apple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_permissions' }),
+      });
+      const data = await res.json();
+      if (data.permissions) {
+        setAppleData((prev) =>
+          prev
+            ? { ...prev, permissions: data.permissions }
+            : { isMacOS: true, permissions: data.permissions }
+        );
+      }
+      const res2 = await fetch('/api/apple');
+      const data2 = await res2.json();
+      if (data2.success) setAppleData(data2);
+    } catch (e) {
+    } finally {
+      setIsRequestingApple(false);
+    }
+  };
+
+  const handleTestAppleNotification = async (action: 'test' | 'reminder' = 'test') => {
+    setIsTestingApple(true);
+    setAppleTestResult(null);
+    try {
+      const res = await fetch('/api/apple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          title: 'Recall Notification Test',
+          message:
+            action === 'reminder'
+              ? 'Test reminder synced to Apple Reminders (iCloud)'
+              : 'Testing native Mac chime and notification banner',
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAppleTestResult(`✓ ${data.message}`);
+      } else {
+        setAppleTestResult(`Error: ${data.error || 'Failed to dispatch'}`);
+      }
+    } catch (e: any) {
+      setAppleTestResult(`Network error: ${e.message}`);
+    } finally {
+      setIsTestingApple(false);
+    }
+  };
+
   // Appearance
   const { theme, setTheme } = useTheme();
   const [interfaceDensity, setInterfaceDensity] = useState<'comfortable' | 'compact'>('comfortable');
@@ -171,9 +240,17 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Load live Google and WhatsApp status
+  // Load live Apple, Google and WhatsApp status
   useEffect(() => {
     async function loadStatus() {
+      try {
+        const appleRes = await fetch('/api/apple');
+        const appleJson = await appleRes.json();
+        if (appleJson.success) {
+          setAppleData(appleJson);
+        }
+      } catch (e) {}
+
       if (session.isGuest) {
         setGoogleConnected(false);
         setGoogleEmail(null);
@@ -1898,16 +1975,159 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Google Connection Card */}
+              {/* 1. Apple Ecosystem Card */}
+              <div className="rounded-2xl bg-white border border-black/[0.06] p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-10 h-10 rounded-2xl bg-black text-white dark:bg-zinc-900 dark:text-white flex items-center justify-center shrink-0">
+                      <PluginIcon id="apple" size={20} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                        <span>Apple</span>
+                        {appleData?.permissions?.isConnected ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/50 text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Connected</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-amber-50 text-[10px] font-semibold text-amber-700 border border-amber-200/50">
+                            Needs Permission
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-400 mt-0.5">
+                        {appleData?.permissions?.isConnected
+                          ? 'Calendar · Reminders · Notifications (iCloud Sync)'
+                          : 'Native EventKit & notification permissions'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsManagingApple(!isManagingApple)}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium cursor-pointer"
+                  >
+                    {isManagingApple ? 'Close' : 'Manage Apple'}
+                  </button>
+                </div>
+
+                {/* Sub-services breakdown: Calendar, Reminders, Notifications */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div className="p-3 rounded-xl bg-zinc-50/70 border border-black/[0.04] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <PluginIcon id="calendar" size={16} />
+                      <span className="text-xs font-medium text-zinc-900">Calendar</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold',
+                        appleData?.permissions?.calendar === 'authorized' ||
+                          appleData?.permissions?.calendar === 'writeOnly'
+                          ? 'text-emerald-600'
+                          : 'text-zinc-400'
+                      )}
+                    >
+                      {appleData?.permissions?.calendar === 'authorized' ||
+                      appleData?.permissions?.calendar === 'writeOnly'
+                        ? 'Connected'
+                        : 'Not connected'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-zinc-50/70 border border-black/[0.04] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-zinc-600" />
+                      <span className="text-xs font-medium text-zinc-900">Reminders</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold',
+                        appleData?.permissions?.reminders === 'authorized'
+                          ? 'text-emerald-600'
+                          : 'text-zinc-400'
+                      )}
+                    >
+                      {appleData?.permissions?.reminders === 'authorized' ? 'Connected' : 'Not connected'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-zinc-50/70 border border-black/[0.04] flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-3.5 h-3.5 text-zinc-600" />
+                      <span className="text-xs font-medium text-zinc-900">Notifications</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold',
+                        appleData?.permissions?.notifications === 'authorized'
+                          ? 'text-emerald-600'
+                          : 'text-zinc-400'
+                      )}
+                    >
+                      {appleData?.permissions?.notifications === 'authorized' ? 'Allowed' : 'Not allowed'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Manage Apple Expanded View */}
+                {isManagingApple && (
+                  <div className="pt-4 border-t border-black/[0.05] space-y-3 apple-slide-down">
+                    <p className="text-xs text-zinc-600 leading-relaxed">
+                      Reminders and calendar events sync with your native Apple applications via EventKit. Items automatically appear across your Mac, iPhone, and Apple Watch through your iCloud account.
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      {!appleData?.permissions?.isConnected && (
+                        <button
+                          type="button"
+                          onClick={handleRequestApplePermissions}
+                          disabled={isRequestingApple}
+                          className="px-3.5 py-1.5 rounded-xl bg-black hover:bg-zinc-800 text-white text-xs font-semibold shadow-xs cursor-pointer disabled:opacity-50"
+                        >
+                          {isRequestingApple ? 'Requesting…' : 'Connect Apple (Grant Permissions)'}
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => handleTestAppleNotification('test')}
+                        disabled={isTestingApple}
+                        className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium cursor-pointer disabled:opacity-50"
+                      >
+                        Test Mac Banner & Chime
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleTestAppleNotification('reminder')}
+                        disabled={isTestingApple}
+                        className="px-3.5 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium cursor-pointer disabled:opacity-50"
+                      >
+                        Sync Test Apple Reminder
+                      </button>
+                    </div>
+
+                    {appleTestResult && (
+                      <div className="text-xs font-medium text-zinc-700 pt-1">
+                        {appleTestResult}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Google Connection Card */}
               <div className="rounded-2xl bg-white border border-black/[0.06] p-5 shadow-xs space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3.5">
                     <div className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                      <PluginIcon id="calendar" size={22} />
+                      <PluginIcon id="google" size={22} />
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
-                        <span>Google Workspace</span>
+                        <span>Google</span>
                         {googleConnected ? (
                           <span className="px-2 py-0.2 rounded-full bg-emerald-50 border border-emerald-200/50 text-[10px] font-semibold text-emerald-700">
                             Connected
@@ -1968,7 +2188,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                {/* Manage Google Expanded View (Section 17) */}
+                {/* Manage Google Expanded View */}
                 {isManagingGoogle && (
                   <div className="pt-4 border-t border-black/[0.05] space-y-4 apple-slide-down">
                     <div className="text-xs font-semibold text-zinc-900">
@@ -2011,76 +2231,106 @@ export default function SettingsPage() {
                 )}
               </div>
 
-              {/* Other Connected Apps */}
-              <div className="rounded-2xl bg-white border border-black/[0.06] divide-y divide-black/[0.04] shadow-xs overflow-hidden">
-                {/* WhatsApp */}
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
+              {/* 3. WhatsApp Card */}
+              <div className="rounded-2xl bg-white border border-black/[0.06] p-5 shadow-xs space-y-4">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3.5">
                     <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
                       <PluginIcon id="whatsapp" size={22} />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-zinc-900">WhatsApp</div>
+                      <div className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                        <span>WhatsApp</span>
+                        {whatsAppRecipient ? (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/50 text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Connected</span>
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-zinc-100 text-[10px] font-semibold text-zinc-500">
+                            Not connected
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-zinc-400 mt-0.5">
-                        {whatsAppRecipient ? `Connected to ${whatsAppRecipient}` : 'Automated alerts & reminders via WhatsApp'}
+                        {whatsAppRecipient
+                          ? `Recipient: ${whatsAppRecipient}`
+                          : 'Automated task reminders via WhatsApp'}
                       </div>
                     </div>
                   </div>
-                  {whatsAppRecipient ? (
-                    <span className="flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200/50 px-3 py-1 rounded-full text-xs font-semibold">
-                      <Check className="w-3 h-3 stroke-[3]" />
-                      <span>Connected</span>
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsManagingWhatsApp(true)}
-                      className="px-3 py-1 rounded-full text-xs font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-700 transition-colors cursor-pointer"
-                    >
-                      Configure
-                    </button>
-                  )}
-                </div>
 
-                {/* Notion */}
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-2xl bg-zinc-100 border border-black/[0.06] flex items-center justify-center shrink-0">
-                      <PluginIcon id="notion" size={22} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-zinc-900">Notion</div>
-                      <div className="text-xs text-zinc-400 mt-0.5">
-                        Workspace knowledge, notes and exported databases
-                      </div>
-                    </div>
-                  </div>
                   <button
                     type="button"
-                    onClick={() => alert('Notion integration is ready to connect with your workspace.')}
+                    onClick={() => setIsManagingWhatsApp(!isManagingWhatsApp)}
                     className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium cursor-pointer"
                   >
-                    Connect +
+                    {isManagingWhatsApp ? 'Close' : 'Manage WhatsApp'}
                   </button>
                 </div>
 
-                {/* Maps */}
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center shrink-0">
-                      <PluginIcon id="maps" size={22} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-zinc-900">Google Maps</div>
-                      <div className="text-xs text-zinc-400 mt-0.5">
-                        Places, commute times, and direct location links
+                {isManagingWhatsApp && (
+                  <div className="pt-4 border-t border-black/[0.05] space-y-4 apple-slide-down">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-semibold text-zinc-900">
+                          Recipient Phone Number
+                        </div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                          E.164 format (+91...)
+                        </div>
                       </div>
+                      <span className="text-xs font-mono bg-zinc-50 border border-black/[0.08] px-3 py-1.5 rounded-xl text-zinc-800">
+                        {whatsAppRecipient || '+91 9622121100'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <div>
+                        <div className="text-xs font-semibold text-zinc-900">Test Reminder</div>
+                        <div className="text-[11px] text-zinc-400">
+                          Dispatch test ping to recipient
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSendTestWhatsApp}
+                        disabled={isTestingWhatsApp}
+                        className="px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-medium cursor-pointer disabled:opacity-50"
+                      >
+                        {isTestingWhatsApp ? 'Sending…' : 'Send Test Ping'}
+                      </button>
+                    </div>
+
+                    {whatsAppTestResult && (
+                      <div className="text-xs font-medium text-zinc-700">
+                        {whatsAppTestResult.message}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Notion Card */}
+              <div className="rounded-2xl bg-white border border-black/[0.06] p-5 shadow-xs flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-zinc-100 border border-black/[0.06] flex items-center justify-center shrink-0">
+                    <PluginIcon id="notion" size={22} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-900">Notion</div>
+                    <div className="text-xs text-zinc-400 mt-0.5">
+                      Workspace knowledge, notes and exported databases
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-zinc-500 bg-zinc-100 px-3 py-1 rounded-full">
-                    Automatic ✓
-                  </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => alert('Notion integration is ready to connect with your workspace.')}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-xs font-medium cursor-pointer"
+                >
+                  Connect +
+                </button>
               </div>
             </div>
           )}

@@ -1,37 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   isMacOS,
+  getApplePermissionStatus,
+  requestApplePermissions,
   showMacOSNotification,
   createAppleReminder,
+  completeAppleReminder,
+  deleteAppleReminder,
   createAppleCalendarEvent,
+  deleteAppleCalendarEvent,
   sendBarkPush,
   dispatchAppleNotification,
 } from '@/lib/apple-notifications';
 
+// GET /api/apple: returns real authorization status
 export async function GET() {
   const isMac = isMacOS();
+  const permissions = await getApplePermissionStatus();
   const hasBark = Boolean(process.env.BARK_KEY && process.env.BARK_KEY.trim().length > 0);
 
   return NextResponse.json({
     success: true,
     isMacOS: isMac,
-    features: {
-      macNotificationBanner: isMac,
-      appleRemindersICloud: isMac,
-      appleCalendarICloud: isMac,
-      barkIOSPush: hasBark,
-    },
+    permissions,
+    hasBark,
     message: isMac
-      ? 'Apple Ecosystem Active: Native Mac notifications and iCloud sync to iPhone/Apple Watch enabled.'
-      : 'Non-macOS environment. iOS Web Push and Bark available.',
+      ? permissions.isConnected
+        ? 'Apple Ecosystem Connected: Native EventKit and UserNotifications active.'
+        : 'Apple Ecosystem Available: Permissions required to enable native sync.'
+      : 'Non-macOS environment.',
   });
 }
 
+// POST /api/apple: handles actions, permission requests, and dispatch
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action = 'test', title = 'Recall Reminder', message = 'Testing Apple notification sync', dueAt, barkKey } = body;
+    const {
+      action = 'test',
+      title = 'Recall',
+      message = 'Reminder notification',
+      dueAt,
+      startAt,
+      endAt,
+      location,
+      notes,
+      id,
+      barkKey,
+      priority,
+    } = body;
 
+    // 1. Request native permissions
+    if (action === 'request_permissions') {
+      const status = await requestApplePermissions();
+      return NextResponse.json({
+        success: true,
+        permissions: status,
+      });
+    }
+
+    // 2. Notification banner test
     if (action === 'test' || action === 'banner') {
       const bannerOk = await showMacOSNotification(title, message, 'Glass');
       return NextResponse.json({
@@ -43,41 +71,73 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 3. Apple Reminder creation via EventKit
     if (action === 'reminder') {
       const result = await createAppleReminder({
         title,
         dueAt: dueAt || new Date(Date.now() + 5 * 60 * 1000),
-        notes: message,
+        notes: notes || message,
+        priority: priority ?? 0,
       });
       return NextResponse.json({
         success: result.success,
         reminderId: result.reminderId,
         error: result.error,
         message: result.success
-          ? 'Apple Reminder created! Syncs to iPhone & Apple Watch via iCloud.'
+          ? 'Apple Reminder created via EventKit! Syncs across iPhone & Apple Watch via iCloud.'
           : result.error,
       });
     }
 
+    // 4. Apple Calendar event creation via EventKit
     if (action === 'calendar') {
-      const start = dueAt ? new Date(dueAt) : new Date(Date.now() + 15 * 60 * 1000);
-      const end = new Date(start.getTime() + 30 * 60 * 1000);
+      const start = startAt || dueAt || new Date(Date.now() + 15 * 60 * 1000);
+      const end = endAt || new Date(new Date(start).getTime() + 30 * 60 * 1000);
       const result = await createAppleCalendarEvent({
         title,
         startAt: start,
         endAt: end,
-        notes: message,
+        location,
+        notes: notes || message,
       });
       return NextResponse.json({
         success: result.success,
         eventId: result.eventId,
         error: result.error,
         message: result.success
-          ? 'Apple Calendar event created! Syncs to iPhone & Apple Watch via iCloud.'
+          ? 'Apple Calendar event created via EventKit! Syncs across iPhone & Apple Watch via iCloud.'
           : result.error,
       });
     }
 
+    // 5. Complete Apple Reminder
+    if (action === 'reminder_complete') {
+      if (!id) {
+        return NextResponse.json({ success: false, error: 'Reminder ID is required' }, { status: 400 });
+      }
+      const result = await completeAppleReminder(id);
+      return NextResponse.json(result);
+    }
+
+    // 6. Delete Apple Reminder
+    if (action === 'reminder_delete') {
+      if (!id) {
+        return NextResponse.json({ success: false, error: 'Reminder ID is required' }, { status: 400 });
+      }
+      const result = await deleteAppleReminder(id);
+      return NextResponse.json(result);
+    }
+
+    // 7. Delete Apple Calendar Event
+    if (action === 'calendar_delete') {
+      if (!id) {
+        return NextResponse.json({ success: false, error: 'Event ID is required' }, { status: 400 });
+      }
+      const result = await deleteAppleCalendarEvent(id);
+      return NextResponse.json(result);
+    }
+
+    // 8. Bark iOS Push
     if (action === 'bark') {
       const result = await sendBarkPush({
         key: barkKey || process.env.BARK_KEY,
@@ -93,6 +153,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // 9. Dispatch All
     if (action === 'dispatch_all') {
       const results = await dispatchAppleNotification({
         title,

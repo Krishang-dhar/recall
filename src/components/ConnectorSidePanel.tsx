@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PluginId, PluginIcon, PluginMeta, PLUGINS_DATA } from './PluginIcon';
+import { PluginId, PluginIcon, PluginMeta, PLUGINS_DATA, MAIN_CONNECTORS } from './PluginIcon';
 import { Portal } from './Portal';
 import { cn } from '@/lib/utils';
 import {
@@ -45,19 +45,28 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
   onAskRecall,
   onScheduleReminder,
 }) => {
-  // All-in-One active connector state
-  const [activeId, setActiveId] = useState<PluginId>(plugin?.id || 'calendar');
+  // Main 4-Connector active state
+  const [activeId, setActiveId] = useState<PluginId>(() => {
+    if (plugin?.id === 'calendar' || plugin?.id === 'gmail' || plugin?.id === 'drive') return 'google';
+    return plugin?.id || 'apple';
+  });
+  const [googleSubTab, setGoogleSubTab] = useState<'calendar' | 'gmail' | 'drive'>(() => {
+    if (plugin?.id === 'gmail' || plugin?.id === 'drive') return plugin.id;
+    return 'calendar';
+  });
 
   useEffect(() => {
     if (plugin?.id) {
-      setActiveId(plugin.id);
+      if (plugin.id === 'calendar' || plugin.id === 'gmail' || plugin.id === 'drive') {
+        setActiveId('google');
+        setGoogleSubTab(plugin.id);
+      } else {
+        setActiveId(plugin.id);
+      }
     }
   }, [plugin?.id]);
 
-  const activePlugin = PLUGINS_DATA.find((p) => p.id === activeId) || plugin || PLUGINS_DATA[0];
-
   // Calendar state
-
   const [calendarEvents, setCalendarEvents] = useState<CalendarEventItem[]>([]);
   const [isCalLoading, setIsCalLoading] = useState(false);
   const [isCreatingCal, setIsCreatingCal] = useState(false);
@@ -90,11 +99,58 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
   const [isUpdatingToken, setIsUpdatingToken] = useState(false);
   const [tokenUpdateFeedback, setTokenUpdateFeedback] = useState<string | null>(null);
   const [isTokenExpired, setIsTokenExpired] = useState(false);
+  const [isManagingToken, setIsManagingToken] = useState(false);
 
   // Apple Ecosystem state
   const [isTestingApple, setIsTestingApple] = useState(false);
   const [appleTestStatus, setAppleTestStatus] = useState<string | null>(null);
   const [barkKeyInput, setBarkKeyInput] = useState('');
+  const [appleData, setAppleData] = useState<{
+    isMacOS: boolean;
+    permissions: {
+      calendar: string;
+      reminders: string;
+      notifications: string;
+      isConnected: boolean;
+    };
+  } | null>(null);
+  const [isRequestingApple, setIsRequestingApple] = useState(false);
+
+  const loadAppleStatus = async () => {
+    try {
+      const res = await fetch('/api/apple');
+      const data = await res.json();
+      if (data.success) {
+        setAppleData(data);
+      }
+    } catch (e) {
+      console.warn('Failed to fetch Apple status', e);
+    }
+  };
+
+  const handleRequestApplePermissions = async () => {
+    setIsRequestingApple(true);
+    try {
+      const res = await fetch('/api/apple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'request_permissions' }),
+      });
+      const data = await res.json();
+      if (data.permissions) {
+        setAppleData((prev) =>
+          prev
+            ? { ...prev, permissions: data.permissions }
+            : { isMacOS: true, permissions: data.permissions }
+        );
+      }
+      loadAppleStatus();
+    } catch (e) {
+      console.warn('Failed to request Apple permissions', e);
+    } finally {
+      setIsRequestingApple(false);
+    }
+  };
 
   // Maps state
   const [mapsQuery, setMapsQuery] = useState('');
@@ -113,6 +169,7 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
     }
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
+      loadAppleStatus();
       if (session.isGuest) {
         setGoogleEmail(null);
         setWhatsAppRecipient(null);
@@ -136,16 +193,22 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    if (activeId === 'calendar') {
+    if (activeId === 'google') {
+      if (googleSubTab === 'calendar') loadCalendarEvents();
+      else if (googleSubTab === 'gmail') loadGmail();
+      else if (googleSubTab === 'drive') loadDrive();
+    } else if (activeId === 'calendar') {
       loadCalendarEvents();
     } else if (activeId === 'gmail') {
       loadGmail();
     } else if (activeId === 'drive') {
       loadDrive();
+    } else if (activeId === 'apple') {
+      loadAppleStatus();
     } else if (activeId === 'whatsapp') {
       loadWhatsAppConfig();
     }
-  }, [isOpen, activeId]);
+  }, [isOpen, activeId, googleSubTab]);
 
   const loadWhatsAppConfig = async () => {
     if (session.isGuest) {
@@ -387,31 +450,63 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
         <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.04]">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-[14px] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)] border border-black/[0.04] flex items-center justify-center shrink-0">
-              <PluginIcon id={activePlugin.id} size={22} />
+              <PluginIcon id={activeId === 'google' || activeId === 'calendar' || activeId === 'gmail' || activeId === 'drive' ? 'google' : activeId} size={22} />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-[15px] font-semibold text-zinc-900 tracking-tight">
-                  {activePlugin.name}
+                  {activeId === 'google' || activeId === 'calendar' || activeId === 'gmail' || activeId === 'drive'
+                    ? 'Google'
+                    : activeId === 'apple'
+                    ? 'Apple'
+                    : activeId === 'whatsapp'
+                    ? 'WhatsApp'
+                    : activeId === 'notion'
+                    ? 'Notion'
+                    : 'Connector'}
                 </h2>
-                {activePlugin.connected && (
+                {((activeId === 'apple' && appleData?.permissions?.isConnected) ||
+                  ((activeId === 'google' || activeId === 'calendar' || activeId === 'gmail' || activeId === 'drive') && Boolean(googleEmail)) ||
+                  (activeId === 'whatsapp' && Boolean(whatsAppRecipient))) && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200/60 text-[10px] font-semibold text-emerald-700">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Connected
                   </span>
                 )}
+                {activeId === 'apple' && !appleData?.permissions?.isConnected && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-[10px] font-semibold text-zinc-500">
+                    Needs Permission
+                  </span>
+                )}
+                {activeId === 'whatsapp' && !whatsAppRecipient && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-zinc-100 text-[10px] font-semibold text-zinc-500">
+                    Not connected
+                  </span>
+                )}
               </div>
               <div className="text-[11px] text-zinc-500 font-medium">
-                {(activePlugin.id === 'calendar' || activePlugin.id === 'gmail' || activePlugin.id === 'drive') && googleEmail ? (
-                  <span>Connected as {googleEmail}</span>
-                ) : activePlugin.id === 'whatsapp' ? (
+                {(activeId === 'google' || activeId === 'calendar' || activeId === 'gmail' || activeId === 'drive') ? (
+                  googleEmail ? (
+                    <span>Connected as {googleEmail}</span>
+                  ) : (
+                    <span>Calendar · Gmail · Drive</span>
+                  )
+                ) : activeId === 'apple' ? (
+                  appleData?.permissions?.isConnected ? (
+                    <span>Calendar · Reminders · Notifications (iCloud)</span>
+                  ) : (
+                    <span>Native EventKit & Notification Access</span>
+                  )
+                ) : activeId === 'whatsapp' ? (
                   whatsAppRecipient ? (
                     <span>Connected · {whatsAppRecipient}</span>
                   ) : (
                     <span>Not connected · Configure below</span>
                   )
+                ) : activeId === 'notion' ? (
+                  <span>Notes & Workspace</span>
                 ) : (
-                  activePlugin.description
+                  <span>Connected workspace</span>
                 )}
               </div>
             </div>
@@ -426,15 +521,31 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
           </button>
         </div>
 
-        {/* All-in-One Integrations Switcher Tabs */}
+        {/* 4 Clean Main Connectors Switcher Tabs */}
         <div className="px-5 py-2.5 border-b border-black/[0.04] bg-zinc-50/70 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-          {PLUGINS_DATA.filter((p) => p.id !== 'recall').map((p) => {
-            const isSelected = activeId === p.id;
+          {MAIN_CONNECTORS.map((p) => {
+            const isSelected =
+              activeId === p.id ||
+              (p.id === 'google' && (activeId === 'calendar' || activeId === 'gmail' || activeId === 'drive'));
+            const isConn =
+              p.id === 'apple'
+                ? Boolean(appleData?.permissions?.isConnected)
+                : p.id === 'google'
+                ? Boolean(googleEmail)
+                : p.id === 'whatsapp'
+                ? Boolean(whatsAppRecipient)
+                : false;
+
             return (
               <button
                 key={p.id}
                 type="button"
-                onClick={() => setActiveId(p.id)}
+                onClick={() => {
+                  setActiveId(p.id);
+                  if (p.id === 'google') {
+                    setGoogleSubTab((prev) => prev || 'calendar');
+                  }
+                }}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 cursor-pointer',
                   isSelected
@@ -444,7 +555,7 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
               >
                 <PluginIcon id={p.id} size={14} />
                 <span>{p.name}</span>
-                {p.connected && (
+                {isConn && (
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                 )}
               </button>
@@ -454,9 +565,63 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
-          {/* ==================== 1. GOOGLE CALENDAR ==================== */}
-          {activeId === 'calendar' && (
+          {/* ==================== 1. GOOGLE WORKSPACE ==================== */}
+          {(activeId === 'google' || activeId === 'calendar' || activeId === 'gmail' || activeId === 'drive') && (
             <div className="space-y-5">
+              {/* Google Sub-pills: Calendar, Gmail, Drive */}
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-zinc-100/80 border border-black/[0.04] w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoogleSubTab('calendar');
+                    loadCalendarEvents();
+                  }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer',
+                    googleSubTab === 'calendar'
+                      ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  )}
+                >
+                  <PluginIcon id="calendar" size={14} />
+                  <span>Calendar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoogleSubTab('gmail');
+                    loadGmail();
+                  }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer',
+                    googleSubTab === 'gmail'
+                      ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  )}
+                >
+                  <PluginIcon id="gmail" size={14} />
+                  <span>Gmail</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGoogleSubTab('drive');
+                    loadDrive();
+                  }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer',
+                    googleSubTab === 'drive'
+                      ? 'bg-white text-zinc-900 shadow-2xs font-semibold'
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  )}
+                >
+                  <PluginIcon id="drive" size={14} />
+                  <span>Drive</span>
+                </button>
+              </div>
+
+              {googleSubTab === 'calendar' && (
+                <div className="space-y-5">
               {/* Account Pill */}
               {googleEmail && (
                 <div className="px-3 py-1.5 rounded-xl bg-blue-50/60 border border-blue-100 text-[11px] text-blue-900 flex items-center justify-between">
@@ -649,9 +814,9 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
             </div>
           )}
 
-          {/* ==================== 2. GMAIL ==================== */}
-          {activeId === 'gmail' && (
-            <div className="space-y-5">
+              {/* Sub-view: Gmail */}
+              {googleSubTab === 'gmail' && (
+                <div className="space-y-5">
               {/* Account Pill */}
               {googleEmail && (
                 <div className="px-3 py-1.5 rounded-xl bg-red-50/60 border border-red-100 text-[11px] text-red-900 flex items-center justify-between">
@@ -863,9 +1028,9 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
             </div>
           )}
 
-          {/* ==================== 3. GOOGLE DRIVE ==================== */}
-          {activeId === 'drive' && (
-            <div className="space-y-5">
+              {/* Sub-view: Google Drive */}
+              {googleSubTab === 'drive' && (
+                <div className="space-y-5">
               {/* Account Pill */}
               {googleEmail && (
                 <div className="px-3 py-1.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-[11px] text-emerald-900 flex items-center justify-between">
@@ -1006,16 +1171,18 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
               </div>
             </div>
           )}
+        </div>
+      )}
 
-          {/* ==================== APPLE ECOSYSTEM ==================== */}
+          {/* ==================== 2. APPLE ECOSYSTEM ==================== */}
           {activeId === 'apple' && (
             <div className="space-y-4">
               {/* Apple Ecosystem Status Card */}
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-zinc-50 via-zinc-100/50 to-white dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-900 border border-black/[0.08] dark:border-white/[0.1] shadow-xs space-y-3">
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-zinc-50 via-zinc-100/50 to-white dark:from-zinc-900 dark:via-zinc-800 dark:to-zinc-900 border border-black/[0.08] dark:border-white/[0.1] shadow-xs space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center shrink-0">
-                      <PluginIcon id="apple" size={16} />
+                    <div className="w-9 h-9 rounded-xl bg-black text-white dark:bg-white dark:text-black flex items-center justify-center shrink-0">
+                      <PluginIcon id="apple" size={18} />
                     </div>
                     <div>
                       <div className="text-sm font-semibold text-zinc-900 dark:text-white">
@@ -1026,34 +1193,90 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
                       </div>
                     </div>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span>iCloud Active</span>
-                  </span>
+                  {appleData?.permissions?.isConnected ? (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Connected</span>
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-semibold border border-amber-500/20">
+                      Needs Permission
+                    </span>
+                  )}
                 </div>
 
-                <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed">
-                  Reminders and schedule events created in Recall automatically sync with native Apple apps. Due alerts ring on your Mac, iPhone, and Apple Watch without third-party tokens or expiration limits.
+                {/* 3 Status Rows: Calendar, Reminders, Notifications */}
+                <div className="p-3 rounded-xl bg-white/70 dark:bg-zinc-800/80 border border-black/[0.04] dark:border-white/[0.06] divide-y divide-black/[0.04] dark:divide-white/[0.06] text-xs">
+                  <div className="py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CalendarIcon className="w-3.5 h-3.5 text-zinc-500" />
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">Calendar</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[11px] font-semibold',
+                        appleData?.permissions?.calendar === 'authorized' ||
+                          appleData?.permissions?.calendar === 'writeOnly'
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-zinc-400'
+                      )}
+                    >
+                      {appleData?.permissions?.calendar === 'authorized' ||
+                      appleData?.permissions?.calendar === 'writeOnly'
+                        ? 'Connected'
+                        : 'Not connected'}
+                    </span>
+                  </div>
+
+                  <div className="py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Check className="w-3.5 h-3.5 text-zinc-500" />
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">Reminders</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[11px] font-semibold',
+                        appleData?.permissions?.reminders === 'authorized'
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-zinc-400'
+                      )}
+                    >
+                      {appleData?.permissions?.reminders === 'authorized' ? 'Connected' : 'Not connected'}
+                    </span>
+                  </div>
+
+                  <div className="py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-3.5 h-3.5 text-zinc-500" />
+                      <span className="font-medium text-zinc-800 dark:text-zinc-200">Notifications</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[11px] font-semibold',
+                        appleData?.permissions?.notifications === 'authorized'
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-zinc-400'
+                      )}
+                    >
+                      {appleData?.permissions?.notifications === 'authorized' ? 'Allowed' : 'Not allowed'}
+                    </span>
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                  Items created in Recall sync through your Apple ID via EventKit. Reminders and calendar events appear automatically across your Apple devices via native iCloud sync.
                 </p>
 
-                <div className="pt-2 border-t border-black/[0.05] dark:border-white/[0.06] grid grid-cols-2 gap-2 text-[11px]">
-                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Apple Reminders (iCloud)</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Apple Calendar</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>macOS Glass Chimes</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>Apple Watch Mirroring</span>
-                  </div>
-                </div>
+                {!appleData?.permissions?.isConnected && (
+                  <button
+                    type="button"
+                    onClick={handleRequestApplePermissions}
+                    disabled={isRequestingApple}
+                    className="w-full py-2.5 rounded-xl bg-black text-white hover:bg-zinc-800 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors shadow-xs"
+                  >
+                    {isRequestingApple ? 'Connecting…' : 'Connect Apple'}
+                  </button>
+                )}
               </div>
 
               {/* Instant Test Buttons */}
@@ -1135,87 +1358,65 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
             </div>
           )}
 
-          {/* ==================== 4. WHATSAPP ==================== */}
+          {/* ==================== 3. WHATSAPP ==================== */}
           {activeId === 'whatsapp' && (
             <div className="space-y-4">
-              {/* WhatsApp Active Card */}
+              {/* WhatsApp Compact Card */}
               <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-black/[0.06] dark:border-white/[0.08] space-y-3">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      WhatsApp Notifications
+                  <div className="flex items-center gap-2.5">
+                    <PluginIcon id="whatsapp" size={20} />
+                    <div>
+                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 block">
+                        WhatsApp
+                      </span>
+                      <span className="text-[11px] text-zinc-400">
+                        Task alerts & reminders
+                      </span>
+                    </div>
+                  </div>
+                  {whatsAppRecipient ? (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span>Connected</span>
                     </span>
-                  </div>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
-                    Active
-                  </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500 text-[11px] font-semibold">
+                      Not connected
+                    </span>
+                  )}
                 </div>
 
-                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  Send real-time task alerts and meeting reminders straight to WhatsApp via Meta Cloud API.
-                </p>
-
-                <div className="pt-2 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between text-[11px] text-zinc-500">
+                <div className="pt-2 border-t border-black/[0.05] dark:border-white/[0.06] flex items-center justify-between text-xs text-zinc-500">
                   <span>Target Recipient</span>
-                  <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                    {whatsAppRecipient || '+91 9622121100'}
+                  <span className="font-semibold text-zinc-800 dark:text-zinc-200 font-mono">
+                    {whatsAppRecipient || 'None configured'}
                   </span>
                 </div>
-              </div>
 
-              {isTokenExpired && (
-                <div className="p-3.5 rounded-2xl bg-amber-50/90 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/50 text-xs text-amber-900 dark:text-amber-200 space-y-1.5">
-                  <div className="font-semibold flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
-                    <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>Meta Access Token Notice</span>
-                  </div>
-                  <p className="text-[11px] text-amber-800/90 dark:text-amber-300/80 leading-relaxed font-normal">
-                    The 24-hour temporary token in your Meta App Dashboard has expired. Generate a refreshed token in Meta Developer Portal and paste it below.
-                  </p>
-                </div>
-              )}
-
-              {/* Token Update Input Section */}
-              <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-black/[0.05] dark:border-white/[0.08] space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Meta Access Token</span>
-                  <a
-                    href="https://developers.facebook.com/apps/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-                  >
-                    <span>Meta Developer Portal</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
-                  </a>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    placeholder="Paste refreshed token (EAAUY...)"
-                    value={whatsAppTokenInput}
-                    onChange={(e) => setWhatsAppTokenInput(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-black/[0.08] dark:border-white/[0.1] text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-zinc-800"
-                  />
+                <div className="flex items-center justify-between pt-1">
                   <button
                     type="button"
-                    onClick={handleSaveWhatsAppToken}
-                    disabled={isUpdatingToken || !whatsAppTokenInput.trim()}
-                    className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-medium cursor-pointer disabled:opacity-40 transition-colors shrink-0"
+                    onClick={() => setIsManagingToken(!isManagingToken)}
+                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                   >
-                    {isUpdatingToken ? 'Verifying…' : 'Update'}
+                    {isManagingToken ? 'Hide token settings' : 'Manage token & credentials'}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestWhatsApp}
+                    disabled={isTestingWhatsApp}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                  >
+                    {isTestingWhatsApp ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    )}
+                    <span>Send Test Ping</span>
                   </button>
                 </div>
-                {tokenUpdateFeedback && (
-                  <div
-                    className={`text-[11px] font-medium ${
-                      tokenUpdateFeedback.startsWith('✓') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
-                    }`}
-                  >
-                    {tokenUpdateFeedback}
-                  </div>
-                )}
               </div>
 
               {whatsAppTestStatus && (
@@ -1230,19 +1431,49 @@ export const ConnectorSidePanel: React.FC<ConnectorSidePanelProps> = ({
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handleTestWhatsApp}
-                disabled={isTestingWhatsApp}
-                className="w-full py-2.5 rounded-2xl bg-zinc-900 hover:bg-black text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
-              >
-                {isTestingWhatsApp ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <MessageCircle className="w-3.5 h-3.5" />
-                )}
-                <span>Send Test WhatsApp Ping</span>
-              </button>
+              {/* Token Update Input Section (Collapsed by default) */}
+              {isManagingToken && (
+                <div className="p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-800/60 border border-black/[0.05] dark:border-white/[0.08] space-y-2.5 apple-slide-down">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">Meta Access Token</span>
+                    <a
+                      href="https://developers.facebook.com/apps/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>Meta Developer Portal</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      placeholder="Paste refreshed token (EAAUY...)"
+                      value={whatsAppTokenInput}
+                      onChange={(e) => setWhatsAppTokenInput(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-zinc-900 border border-black/[0.08] dark:border-white/[0.1] text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 outline-none focus:border-zinc-800"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveWhatsAppToken}
+                      disabled={isUpdatingToken || !whatsAppTokenInput.trim()}
+                      className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-black text-white text-xs font-medium cursor-pointer disabled:opacity-40 transition-colors shrink-0"
+                    >
+                      {isUpdatingToken ? 'Verifying…' : 'Update'}
+                    </button>
+                  </div>
+                  {tokenUpdateFeedback && (
+                    <div
+                      className={`text-[11px] font-medium ${
+                        tokenUpdateFeedback.startsWith('✓') ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {tokenUpdateFeedback}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
