@@ -78,13 +78,20 @@ export function setSessionMode(
   extraData?: { email?: string; name?: string; picture?: string }
 ) {
   if (typeof window === 'undefined') return;
+  const prevMode = localStorage.getItem('recall_session_mode');
+  const prevUser = localStorage.getItem('recall_google_user');
+
   localStorage.setItem('recall_session_mode', mode);
   if (mode === 'google' && extraData) {
     localStorage.setItem('recall_google_user', JSON.stringify(extraData));
   } else if (mode === 'guest') {
     localStorage.removeItem('recall_google_user');
   }
-  window.dispatchEvent(new CustomEvent('recall-session-changed', { detail: { mode } }));
+
+  // Only dispatch if actual change occurred to prevent re-render cascades
+  if (prevMode !== mode || (extraData && JSON.stringify(extraData) !== prevUser)) {
+    window.dispatchEvent(new CustomEvent('recall-session-changed', { detail: { mode } }));
+  }
 }
 
 export function clearGuestData() {
@@ -97,65 +104,79 @@ export function clearGuestData() {
   window.dispatchEvent(new CustomEvent('recall-session-changed', { detail: { mode: 'guest' } }));
 }
 
+// Module-level single check to prevent spamming /api/google/status across multiple components
+let isStatusChecking = false;
+let statusCheckedOnce = false;
+
+function syncServerGoogleStatus() {
+  if (typeof window === 'undefined' || isStatusChecking || statusCheckedOnce) return;
+  isStatusChecking = true;
+
+  fetch('/api/google/status')
+    .then((res) => res.json())
+    .then((data) => {
+      statusCheckedOnce = true;
+      if (data?.google?.connected && data.google?.email) {
+        const currentMode = localStorage.getItem('recall_session_mode');
+        if (currentMode !== 'owner') {
+          const newUserData = {
+            email: data.google.email,
+            name: data.google.name || data.google.email.split('@')[0],
+          };
+          setSessionMode('google', newUserData);
+        }
+      } else if (data?.google?.connected === false) {
+        const currentMode = localStorage.getItem('recall_session_mode');
+        if (currentMode === 'google') {
+          setSessionMode('guest');
+        }
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      isStatusChecking = false;
+    });
+}
+
 export function useUserSession(): {
   session: UserIdentity;
   setMode: (mode: SessionMode, extraData?: any) => void;
   resetGuestData: () => void;
+  isHydrated: boolean;
 } {
-  const [session, setSession] = useState<UserIdentity>(getUserIdentity());
+  // Start with GUEST_USER on both server and initial client render to guarantee 100% hydration match
+  const [session, setSession] = useState<UserIdentity>(GUEST_USER);
+  const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
-    // 1. Check for URL redirect parameters from OAuth callback
-    if (typeof window !== 'undefined') {
-      const searchParams = new URLSearchParams(window.location.search);
-      const isConnectedGoogle = searchParams.get('connected') === 'google';
-      const urlEmail = searchParams.get('email');
-      const urlName = searchParams.get('name');
+    // 1. Immediately hydrate real client identity from localStorage on mount
+    queueMicrotask(() => {
+      setSession(getUserIdentity());
+      setIsHydrated(true);
+    });
 
-      if (isConnectedGoogle || urlEmail) {
-        const email = urlEmail || undefined;
-        const name = urlName || (email ? email.split('@')[0] : 'Google User');
-        setSessionMode('google', { email, name });
-        setSession(getUserIdentity());
+    // 2. Handle URL redirect params from OAuth
+    const searchParams = new URLSearchParams(window.location.search);
+    const isConnectedGoogle = searchParams.get('connected') === 'google';
+    const urlEmail = searchParams.get('email');
+    const urlName = searchParams.get('name');
 
-        // Clean up URL parameters cleanly without reloading
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('connected');
-        cleanUrl.searchParams.delete('mode');
-        cleanUrl.searchParams.delete('email');
-        cleanUrl.searchParams.delete('name');
-        window.history.replaceState({}, document.title, cleanUrl.pathname + (cleanUrl.search || ''));
-      }
+    if (isConnectedGoogle || urlEmail) {
+      const email = urlEmail || undefined;
+      const name = urlName || (email ? email.split('@')[0] : 'Google User');
+      setSessionMode('google', { email, name });
+      setSession(getUserIdentity());
+
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('connected');
+      cleanUrl.searchParams.delete('mode');
+      cleanUrl.searchParams.delete('email');
+      cleanUrl.searchParams.delete('name');
+      window.history.replaceState({}, document.title, cleanUrl.pathname + (cleanUrl.search || ''));
     }
 
-    // 2. Fetch server Google status to ensure local session matches real server tokens
-    fetch('/api/google/status')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data?.google?.connected && data.google?.email) {
-          const currentMode = localStorage.getItem('recall_session_mode');
-          if (currentMode !== 'owner') {
-            const currentGoogleUser = localStorage.getItem('recall_google_user');
-            const newUserData = {
-              email: data.google.email,
-              name: data.google.name || data.google.email.split('@')[0],
-            };
-            if (currentMode !== 'google' || !currentGoogleUser) {
-              setSessionMode('google', newUserData);
-              setSession(getUserIdentity());
-            }
-          }
-        } else if (data?.google?.connected === false) {
-          const currentMode = localStorage.getItem('recall_session_mode');
-          if (currentMode === 'google') {
-            setSessionMode('guest');
-            setSession(getUserIdentity());
-          }
-        }
-      })
-      .catch(() => {});
-
-    setSession(getUserIdentity());
+    // 3. Centralized single status check
+    syncServerGoogleStatus();
 
     const handleUpdate = () => {
       setSession(getUserIdentity());
@@ -173,5 +194,6 @@ export function useUserSession(): {
     session,
     setMode: setSessionMode,
     resetGuestData: clearGuestData,
+    isHydrated,
   };
 }

@@ -52,6 +52,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
   const [errorMessage, setErrorMessage] = useState('');
   const [isDirectlyInserted, setIsDirectlyInserted] = useState<boolean | null>(null);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
+  const [hasSpoken, setHasSpoken] = useState(false);
   const [settings, setSettings] = useState<RecallFlowSettings>(() => getFlowSettings());
 
   // References
@@ -437,6 +438,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
     setIsDirectlyInserted(null);
     setCopiedSuccess(false);
     hasSpokenRef.current = false;
+    setHasSpoken(false);
     transcriptRef.current = '';
     abortControllerRef.current = new AbortController();
 
@@ -483,6 +485,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
 
             if (vol > 0.15) {
               hasSpokenRef.current = true;
+              setHasSpoken(true);
               resetSilenceTimer();
             }
 
@@ -521,6 +524,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
             setTranscript(full);
             transcriptRef.current = full;
             hasSpokenRef.current = true;
+            setHasSpoken(true);
             resetSilenceTimer();
           }
         };
@@ -574,7 +578,7 @@ export function useRecallFlowEngine(options: UseRecallFlowEngineOptions = {}) {
     isDirectlyInserted,
     copiedSuccess,
     settings,
-    hasSpoken: hasSpokenRef.current,
+    hasSpoken,
     startListening,
     stopAndProcess,
     cancel,

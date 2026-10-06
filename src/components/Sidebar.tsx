@@ -13,7 +13,6 @@ import {
   MessageSquare,
   Trash2,
   Pencil,
-  Mic,
   RotateCcw,
   ChevronRight,
   PanelLeftClose,
@@ -238,18 +237,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <svg className="w-4 h-4 stroke-[2]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
           <polyline points="22 4 12 14.01 9 11.01" />
-        </svg>
-      ),
-    },
-    {
-      label: 'Recall Flow',
-      href: '/flow',
-      count: 0,
-      icon: (
-        <svg className="w-4 h-4 stroke-[2]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-          <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-          <line x1="12" x2="12" y1="19" y2="22" />
         </svg>
       ),
     },
@@ -622,14 +609,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }}
             className="flex items-center gap-2.5 group cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#0052FF] to-[#7928CA] text-white flex items-center justify-center font-semibold text-xs shadow-xs group-hover:scale-105 transition-transform">
+            <div suppressHydrationWarning className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#0052FF] to-[#7928CA] text-white flex items-center justify-center font-semibold text-xs shadow-xs group-hover:scale-105 transition-transform">
               {session.initials}
             </div>
             <div className="flex flex-col text-left">
-              <span className="text-xs font-semibold text-zinc-900 leading-tight">
+              <span suppressHydrationWarning className="text-xs font-semibold text-zinc-900 leading-tight">
                 {session.name}
               </span>
-              <span className="text-[10px] text-zinc-400">{session.role}</span>
+              <span suppressHydrationWarning className="text-[10px] text-zinc-400">{session.role}</span>
             </div>
           </Link>
 

@@ -163,6 +163,7 @@ export const Header: React.FC = () => {
 
           <Link
             href="/account"
+            suppressHydrationWarning
             title={`Account (${session.name})`}
             className="w-8 h-8 rounded-full bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-200 text-xs font-semibold flex items-center justify-center border border-white dark:border-white/[0.1] shadow-xs cursor-pointer select-none transition-all active:scale-95"
           >

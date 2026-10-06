@@ -13,7 +13,7 @@ export interface VoiceReminderResult {
 }
 
 export async function triggerVoiceReminder(
-  options: VoiceReminderOptions
+  _options: VoiceReminderOptions
 ): Promise<VoiceReminderResult> {
   // Voice notification is disabled per user preference
   return {

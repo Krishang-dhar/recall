@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 import { GlobalSearchModal } from './GlobalSearchModal';
+import { Header } from './Header';
+import { BottomNavigation } from './BottomNavigation';
 
 interface WorkspaceShellProps {
   children: React.ReactNode;
@@ -11,9 +13,12 @@ interface WorkspaceShellProps {
 
 export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
+
+  const isChatRoute = pathname?.startsWith('/chat/');
 
   // Default to open on wider screens
   useEffect(() => {
@@ -82,7 +87,7 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
   };
 
   return (
-    <div className="min-h-screen flex w-full">
+    <div className="h-full h-dvh flex w-full overflow-hidden">
       <Sidebar
         isOpen={isSidebarOpen}
         onToggle={handleToggleSidebar}
@@ -97,8 +102,16 @@ export const WorkspaceShell: React.FC<WorkspaceShellProps> = ({ children }) => {
         onSelectChat={handleSelectConversation}
       />
 
-      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
-        {children}
+      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
+        <Header />
+        <main
+          className={`flex-1 min-h-0 flex flex-col w-full max-w-[1020px] mx-auto px-2 sm:px-6 ${
+            isChatRoute ? 'overflow-hidden py-1' : 'overflow-y-auto py-2 sm:py-4'
+          }`}
+        >
+          {children}
+        </main>
+        <BottomNavigation />
       </div>
     </div>
   );

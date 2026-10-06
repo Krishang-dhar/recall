@@ -281,7 +281,7 @@ export default function ChatDetailPage() {
   const formattedDate = formatChatDate(conversation?.createdAt);
 
   return (
-    <div className="w-full flex flex-col h-[calc(100vh-72px)] max-w-[920px] mx-auto overflow-hidden apple-fade-in px-2 sm:px-4">
+    <div className="w-full flex flex-col h-full min-h-0 max-w-[920px] mx-auto overflow-hidden apple-fade-in px-2 sm:px-4">
       {/* ── 1. COMPACT NOTION-STYLE HEADER (PINNED TOP) ────────────────────── */}
       <section className="shrink-0 pt-1 pb-3 border-b border-black/[0.06] dark:border-white/[0.08] space-y-2">
         {/* Top Breadcrumb & Action Toolbar */}

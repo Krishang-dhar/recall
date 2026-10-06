@@ -1,6 +1,4 @@
 import type { Metadata } from 'next';
-import { Header } from '@/components/Header';
-import { BottomNavigation } from '@/components/BottomNavigation';
 import { WorkspaceShell } from '@/components/WorkspaceShell';
 import { TasksProvider } from '@/lib/TasksContext';
 import './globals.css';
@@ -24,28 +22,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var saved = localStorage.getItem('recall-theme');
-                  var isDark = saved === 'dark';
-                  if (isDark) {
-                    document.documentElement.classList.add('dark');
-                    document.documentElement.style.colorScheme = 'dark';
-                  } else {
-                    document.documentElement.classList.remove('dark');
-                    document.documentElement.style.colorScheme = 'light';
-                  }
-                } catch(e) {}
-              })();
-            `,
-          }}
-        />
-      </head>
-      <body className="min-h-full flex flex-col bg-[#F8F9FD] dark:bg-[#212121] text-zinc-900 dark:text-[#ececec] selection:bg-blue-100 dark:selection:bg-blue-900/60 selection:text-blue-900 dark:selection:text-blue-100 transition-colors duration-200">
+      <body className="h-full overflow-hidden flex flex-col bg-[#F8F9FD] dark:bg-[#212121] text-zinc-900 dark:text-[#ececec] selection:bg-blue-100 dark:selection:bg-blue-900/60 selection:text-blue-900 dark:selection:text-blue-100 transition-colors duration-200" suppressHydrationWarning>
         {/* Iridescent atmospheric ambient gradient matching palette with ChatGPT dark mode refinement */}
         <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
           <div className="absolute -top-[14%] left-1/2 -translate-x-1/2 w-[960px] h-[580px] bg-gradient-to-b from-[#0052FF]/[0.07] dark:from-[#0052FF]/[0.12] via-[#7928CA]/[0.04] dark:via-[#7928CA]/[0.08] to-transparent blur-3xl opacity-80 ambient-aura-1" />
@@ -55,11 +32,7 @@ export default function RootLayout({
 
         <TasksProvider>
           <WorkspaceShell>
-            <Header />
-            <main className="flex-1 min-h-0 flex flex-col max-w-[1020px] w-full mx-auto px-2 sm:px-6 pt-1 sm:pt-2">
-              {children}
-            </main>
-            <BottomNavigation />
+            {children}
           </WorkspaceShell>
         </TasksProvider>
       </body>

@@ -14,7 +14,6 @@ import {
   HardDrive,
   ExternalLink,
 } from 'lucide-react';
-import { VoiceOrb, VoiceOrbState } from './VoiceOrb';
 import { Button } from '@/components/ui/button';
 import { PluginIcon } from './PluginIcon';
 import { cn } from '@/lib/utils';
@@ -188,9 +187,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         {/* ── STEP 1: WELCOME TO RECALL ── */}
         {currentStep === 1 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 flex flex-col items-center w-full">
-            <div className="relative w-28 h-28 sm:w-32 sm:h-32 flex items-center justify-center mx-auto my-2">
-              <div className="absolute inset-[-10px] rounded-full bg-gradient-to-tr from-[#0052FF]/25 via-[#7928CA]/20 to-[#00D2FF]/25 blur-xl pointer-events-none siri-orb-breathing" />
-              <VoiceOrb state="idle" size="xl" className="w-28 h-28 sm:w-32 sm:h-32" />
+            <div className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl bg-gradient-to-tr from-[#0052FF]/10 via-[#7928CA]/10 to-[#00D2FF]/10 border border-black/[0.06] dark:border-white/[0.1] shadow-lg flex items-center justify-center p-3.5 mx-auto my-2">
+              <span className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-[#0052FF]/20 to-[#00D2FF]/20 blur-md opacity-60" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/recall-logo.png"
+                alt="Recall"
+                className="relative w-full h-full object-contain drop-shadow-[0_4px_16px_rgba(0,82,255,0.3)]"
+              />
             </div>
 
             <div className="space-y-2">
@@ -382,9 +386,8 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
         {/* ── STEP 4: ALL CONNECTED & READY ── */}
         {currentStep === 4 && (
           <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300 flex flex-col items-center w-full">
-            <div className="relative w-20 h-20 flex items-center justify-center mx-auto my-1">
-              <div className="absolute inset-[-10px] rounded-full bg-gradient-to-tr from-[#0052FF]/20 via-[#7928CA]/20 to-[#00D2FF]/20 blur-xl pointer-events-none siri-orb-breathing" />
-              <VoiceOrb state="success" size="lg" />
+            <div className="relative w-20 h-20 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mx-auto my-1 shadow-sm">
+              <CheckCircle2 className="w-10 h-10 stroke-[2.2]" />
             </div>
 
             <div className="space-y-1">

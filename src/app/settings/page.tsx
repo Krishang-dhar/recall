@@ -380,7 +380,6 @@ export default function SettingsPage() {
   const navItems: Array<{ id: SettingsTab; label: string; icon: any }> = [
     { id: 'general', label: 'General', icon: SlidersHorizontal },
     { id: 'ai', label: 'Recall AI', icon: Cpu },
-    { id: 'flow', label: 'Recall Flow', icon: Mic },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'connections', label: 'Connections', icon: Link2 },
     { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -716,43 +715,6 @@ export default function SettingsPage() {
                       }`}
                     />
                   </button>
-                </div>
-
-                {/* Recall Flow Quick Toggle */}
-                <div className="p-4 sm:p-5 flex items-center justify-between gap-4 hover:bg-zinc-50/50 transition-colors">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-zinc-900">Recall Flow (AI Voice)</span>
-                      <kbd className="px-1.5 py-0.5 text-[10px] font-mono font-medium text-zinc-600 bg-zinc-100 border border-black/[0.08] rounded">
-                        {flowSettings.shortcut}
-                      </kbd>
-                    </div>
-                    <div className="text-xs text-zinc-400 mt-0.5">
-                      Speak anywhere to clean dictation, schedule meetings, or set WhatsApp reminders
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('flow')}
-                      className="text-xs text-[#0052FF] hover:underline font-medium cursor-pointer"
-                    >
-                      Configure
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateFlow({ enabled: !flowSettings.enabled })}
-                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
-                        flowSettings.enabled ? 'bg-zinc-900' : 'bg-zinc-200'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 shadow-xs ${
-                          flowSettings.enabled ? 'translate-x-5' : 'translate-x-0'
-                        }`}
-                      />
-                    </button>
-                  </div>
                 </div>
               </div>
 
